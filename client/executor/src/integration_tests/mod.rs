@@ -932,3 +932,16 @@ fn return_value(wasm_method: WasmExecutionMethod) {
 		(1234u64).encode()
 	);
 }
+
+#[test]
+#[cfg(feature = "wasmtime")]
+fn test_ebpf() {
+	let mut ext = TestExternalities::default();
+	let mut ext = ext.ext();
+	let wasm_method = WasmExecutionMethod::Compiled {
+		instantiation_strategy:
+			sc_executor_wasmtime::InstantiationStrategy::RecreateInstanceCopyOnWrite,
+	};
+
+	call_in_wasm("test_ebpf", &[], wasm_method, &mut ext).unwrap();
+}
