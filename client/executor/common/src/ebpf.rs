@@ -81,7 +81,7 @@ pub fn execute(program: &[u8], input: &mut [u8], context: &mut dyn SupervisorCon
 		EbpfVm::new(&verified_executable, &mut ProcessData { context }, &mut [], vec![mem_region])
 			.unwrap();
 	let _res = vm
-		.execute_program_interpreted(&mut TestInstructionMeter { remaining: 1 })
+		.execute_program_interpreted(&mut TestInstructionMeter { remaining: 100_000_000 })
 		.unwrap();
 }
 
