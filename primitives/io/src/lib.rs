@@ -17,7 +17,6 @@
 
 //! I/O host interface for substrate runtime.
 
-#![warn(missing_docs)]
 #![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(not(feature = "std"), feature(alloc_error_handler))]
 #![cfg_attr(
@@ -1657,6 +1656,7 @@ pub trait Sandbox {
 	}
 }
 
+/// Sandbox but ebpf instead of wasm.
 #[runtime_interface(wasm_only)]
 pub trait Ebpf {
 	// TODO: Error handling
@@ -1677,13 +1677,13 @@ pub trait Ebpf {
 
 	/// If the calling code that is in turn was called by the EBPF program, this function will read
 	/// the memory of that program into the given buffer.
-	fn caller_read(&mut self, offset: u32, buf_ptr: Pointer<u8>, buf_len: u32) {
+	fn caller_read(&mut self, offset: u64, buf_ptr: Pointer<u8>, buf_len: u32) {
 		self.ebpf().caller_read(offset, buf_ptr, buf_len)
 	}
 
 	/// If the calling code that is in turn was called by the EBPF program, this function will write
 	/// the memory of that program from the given buffer.
-	fn caller_write(&mut self, offset: u32, buf_ptr: Pointer<u8>, buf_len: u32) {
+	fn caller_write(&mut self, offset: u64, buf_ptr: Pointer<u8>, buf_len: u32) {
 		self.ebpf().caller_write(offset, buf_ptr, buf_len)
 	}
 }

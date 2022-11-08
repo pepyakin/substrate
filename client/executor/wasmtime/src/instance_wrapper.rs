@@ -325,10 +325,6 @@ fn get_table(instance: &Instance, ctx: &mut Store) -> Option<Table> {
 		.cloned()
 }
 
-fn get_ext_syscall(instance: &Instance, ctx: &mut Store) -> Option<Func> {
-	instance.get_export(ctx, "ext_syscall").as_ref().and_then(extern_func).cloned()
-}
-
 /// Functions related to memory.
 impl InstanceWrapper {
 	/// Returns the pointer to the first byte of the linear memory for this instance.

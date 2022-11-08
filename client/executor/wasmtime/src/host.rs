@@ -77,6 +77,7 @@ impl HostState {
 /// a longer-living `HostState`.
 pub(crate) struct HostContext<'a> {
 	pub(crate) caller: Caller<'a, StoreData>,
+	pub(crate) ebpf_memory_ref: Option<*mut ()>,
 }
 
 impl<'a> HostContext<'a> {
@@ -188,28 +189,35 @@ impl<'a> sp_wasm_interface::Ebpf for HostContext<'a> {
 			&mut EbpfSupervisorContext { syscall_handler, host_context: self, state },
 		);
 
-		// let program = sc_executor_common::ebpf::Program::new(program);
-		todo!()
+		// TODO:
+		Ok(vec![])
 	}
 
 	/// If the calling code that is in turn was called by the EBPF program, this function will read
 	/// the memory of that program into the given buffer.
-	fn caller_read(&mut self, offset: u32, buf_ptr: Pointer<u8>, buf_len: u32) {
-		// // you might want to constrain all the size.
-		// let mut buf = vec![0u8; buf_len as usize];
-		// self.ebpf_caller().expect("EBPF caller is not set").read(offset, &mut buf);
-		// util::write_memory(&mut self.caller, buf_ptr, &buf).expect("write memory");
+	fn caller_read(&mut self, offset: u64, buf_ptr: Pointer<u8>, buf_len: u32) {
+		let mut buf = vec![0u8; buf_len as usize];
+		unsafe {
+			let memory_ref =
+				sc_executor_common::ebpf::MemoryRef::recover(self.ebpf_memory_ref.unwrap());
+			memory_ref.read(offset, &mut buf);
+		}
+		util::write_memory_from(&mut self.caller, buf_ptr, &buf).expect("write memory");
 	}
 
 	/// If the calling code that is in turn was called by the EBPF program, this function will write
 	/// the memory of that program from the given buffer.
-	fn caller_write(&mut self, offset: u32, buf_ptr: Pointer<u8>, buf_len: u32) {
-		// // read the supervisor memory into a buffer.
-		// let buffer = match util::read_memory(&self.caller, buf_ptr, buf_len) {
-		// 	Err(_) => todo!(),
-		// 	Ok(buffer) => buffer,
-		// };
-		// self.ebpf_caller().expect("no epbf caller").write(offset, &buffer);
+	fn caller_write(&mut self, offset: u64, buf_ptr: Pointer<u8>, buf_len: u32) {
+		// read the supervisor memory into a buffer.
+		let buffer = match util::read_memory(&self.caller, buf_ptr, buf_len as usize) {
+			Err(_) => todo!(),
+			Ok(buffer) => buffer,
+		};
+		unsafe {
+			let mut memory_ref =
+				sc_executor_common::ebpf::MemoryRef::recover(self.ebpf_memory_ref.unwrap());
+			memory_ref.write(offset, &buffer);
+		}
 	}
 }
 
@@ -229,7 +237,8 @@ impl<'a, 'b> sc_executor_common::ebpf::SupervisorContext for EbpfSupervisorConte
 		r5: u64,
 		memory_ref: sc_executor_common::ebpf::MemoryRef<'_, '_>,
 	) -> u64 {
-		// TODO: stash the memory ref somehow I guess?
+		self.host_context.ebpf_memory_ref = Some(memory_ref.erase());
+
 		let mut rets = [Val::I64(0i64); 1];
 		self.syscall_handler
 			.call(
@@ -245,6 +254,9 @@ impl<'a, 'b> sc_executor_common::ebpf::SupervisorContext for EbpfSupervisorConte
 				&mut rets,
 			)
 			.unwrap();
+
+		self.host_context.ebpf_memory_ref = None;
+
 		rets[0].unwrap_i64() as u64
 	}
 }

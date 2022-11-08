@@ -18,14 +18,38 @@
 
 use solana_rbpf::{
 	ebpf,
-	elf::{register_bpf_function, Executable},
-	memory_region::{MemoryMapping, MemoryRegion},
+	elf::Executable,
+	memory_region::{AccessType, MemoryMapping, MemoryRegion},
 	verifier::RequisiteVerifier,
 	vm::{Config, EbpfVm, SyscallRegistry, TestInstructionMeter, VerifiedExecutable},
 };
 
 pub struct MemoryRef<'a, 'b> {
 	mapping: &'a mut MemoryMapping<'b>,
+}
+
+impl<'a, 'b> MemoryRef<'a, 'b> {
+	pub fn erase(self) -> *mut () {
+		self.mapping as *mut _ as *mut ()
+	}
+
+	pub unsafe fn recover(ptr: *mut ()) -> Self {
+		MemoryRef { mapping: std::mem::transmute(ptr) }
+	}
+
+	pub fn read(&self, offset: u64, buf: &mut [u8]) {
+		let host_addr = self.mapping.map(AccessType::Load, offset, buf.len() as u64).unwrap();
+		buf.copy_from_slice(unsafe {
+			std::slice::from_raw_parts(host_addr as usize as *mut u8, buf.len())
+		});
+	}
+
+	pub fn write(&mut self, offset: u64, buf: &[u8]) {
+		let host_addr = self.mapping.map(AccessType::Store, offset, buf.len() as u64).unwrap();
+		unsafe {
+			std::ptr::copy_nonoverlapping(buf.as_ptr(), host_addr as usize as *mut u8, buf.len())
+		};
+	}
 }
 
 /// This context is used for calling back into the supervisor.
@@ -41,12 +65,13 @@ pub trait SupervisorContext {
 	) -> u64;
 }
 
+/// Executes the given program represented as an elf binary and input data.
 pub fn execute(program: &[u8], input: &mut [u8], context: &mut dyn SupervisorContext) {
 	let config = Config::default();
 	let mut syscall_registry = SyscallRegistry::default();
 	syscall_registry.register_syscall_by_name(b"abort", abort_syscall).unwrap();
 	syscall_registry.register_syscall_by_name(b"ext_syscall", ext_syscall).unwrap();
-	let mut executable =
+	let executable =
 		Executable::<TestInstructionMeter>::from_elf(program, config, syscall_registry).unwrap();
 	let mem_region = MemoryRegion::new_writable(input, ebpf::MM_INPUT_START);
 	let verified_executable =
@@ -55,7 +80,7 @@ pub fn execute(program: &[u8], input: &mut [u8], context: &mut dyn SupervisorCon
 	let mut vm =
 		EbpfVm::new(&verified_executable, &mut ProcessData { context }, &mut [], vec![mem_region])
 			.unwrap();
-	let res = vm
+	let _res = vm
 		.execute_program_interpreted(&mut TestInstructionMeter { remaining: 1 })
 		.unwrap();
 }
