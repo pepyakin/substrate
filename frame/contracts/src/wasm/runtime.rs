@@ -539,7 +539,7 @@ where
 		ptr: u32,
 		buf: &mut [u8],
 	) -> Result<(), DispatchError> {
-		ebpf::caller_read(ptr.into(), buf.as_mut_ptr(), buf.len() as u32);
+		ebpf::caller_read(ptr.into(), buf.as_mut_ptr() as usize as u32, buf.len() as u32);
 		Ok(())
 	}
 
@@ -634,7 +634,7 @@ where
 	///
 	/// - designated area is not within the bounds of the sandbox memory.
 	fn write_sandbox_memory(&mut self, ptr: u32, buf: &[u8]) -> Result<(), DispatchError> {
-		ebpf::caller_write(ptr.into(), buf.as_ptr() as _, buf.len() as u32);
+		ebpf::caller_write(ptr.into(), buf.as_ptr() as usize as u32, buf.len() as u32);
 		Ok(())
 	}
 

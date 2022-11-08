@@ -195,21 +195,21 @@ impl<'a> sp_wasm_interface::Ebpf for HostContext<'a> {
 
 	/// If the calling code that is in turn was called by the EBPF program, this function will read
 	/// the memory of that program into the given buffer.
-	fn caller_read(&mut self, offset: u64, buf_ptr: Pointer<u8>, buf_len: u32) {
+	fn caller_read(&mut self, offset: u64, buf_ptr: u32, buf_len: u32) {
 		let mut buf = vec![0u8; buf_len as usize];
 		unsafe {
 			let memory_ref =
 				sc_executor_common::ebpf::MemoryRef::recover(self.ebpf_memory_ref.unwrap());
 			memory_ref.read(offset, &mut buf);
 		}
-		util::write_memory_from(&mut self.caller, buf_ptr, &buf).expect("write memory");
+		util::write_memory_from(&mut self.caller, buf_ptr.into(), &buf).expect("write memory");
 	}
 
 	/// If the calling code that is in turn was called by the EBPF program, this function will write
 	/// the memory of that program from the given buffer.
-	fn caller_write(&mut self, offset: u64, buf_ptr: Pointer<u8>, buf_len: u32) {
+	fn caller_write(&mut self, offset: u64, buf_ptr: u32, buf_len: u32) {
 		// read the supervisor memory into a buffer.
-		let buffer = match util::read_memory(&self.caller, buf_ptr, buf_len as usize) {
+		let buffer = match util::read_memory(&self.caller, buf_ptr.into(), buf_len as usize) {
 			Err(_) => todo!(),
 			Ok(buffer) => buffer,
 		};
