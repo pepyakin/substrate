@@ -1657,6 +1657,32 @@ pub trait Sandbox {
 	}
 }
 
+#[runtime_interface(wasm_only)]
+pub trait Ebpf {
+	// TODO: Error handling
+
+	/// Executes the given EBPF program. The program is expected to be a valid ELF file. The program
+	/// takes input as a buffer.
+	fn execute(&mut self, program: &[u8], input: &[u8]) -> Vec<u8> {
+		self.ebpf()
+			.execute(program, input)
+	}
+
+	/// If the calling code that is in turn was called by the EBPF program, this function will read
+	/// the memory of that program into the given buffer.
+	fn caller_read(&mut self, offset: u32, buf_ptr: Pointer<u8>, buf_len: u32) {
+		self.ebpf()
+			.caller_read(offset, buf_ptr, buf_len)
+	}
+
+	/// If the calling code that is in turn was called by the EBPF program, this function will write
+	/// the memory of that program from the given buffer.
+	fn caller_write(&mut self, offset: u32, buf_ptr: Pointer<u8>, buf_len: u32) {
+		self.ebpf()
+			.caller_write(offset, buf_ptr, buf_len)
+	}
+}
+
 /// Wasm host functions for managing tasks.
 ///
 /// This should not be used directly. Use `sp_tasks` for running parallel tasks instead.
@@ -1769,6 +1795,7 @@ pub type SubstrateHostFunctions = (
 	offchain_index::HostFunctions,
 	runtime_tasks::HostFunctions,
 	transaction_index::HostFunctions,
+	ebpf::HostFunctions,
 );
 
 #[cfg(test)]

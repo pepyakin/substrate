@@ -305,6 +305,7 @@ pub trait FunctionContext {
 	fn deallocate_memory(&mut self, ptr: Pointer<u8>) -> Result<()>;
 	/// Provides access to the sandbox.
 	fn sandbox(&mut self) -> &mut dyn Sandbox;
+	fn ebpf(&mut self) -> &mut dyn Ebpf;
 
 	/// Registers a panic error message within the executor.
 	///
@@ -382,6 +383,20 @@ pub trait Sandbox {
 	///
 	/// Returns `Some(_)` when the requested global variable could be found.
 	fn get_global_val(&self, instance_idx: u32, name: &str) -> Result<Option<Value>>;
+}
+
+pub trait Ebpf {
+	/// Executes the given EBPF program. The program is expected to be a valid ELF file. The program
+	/// takes input as a buffer.
+	fn execute(&mut self, program: &[u8], input: &[u8]) -> Vec<u8>;
+
+	/// If the calling code that is in turn was called by the EBPF program, this function will read
+	/// the memory of that program into the given buffer.
+	fn caller_read(&mut self, offset: u32, buf_ptr: Pointer<u8>, buf_len: u32);
+
+	/// If the calling code that is in turn was called by the EBPF program, this function will write
+	/// the memory of that program from the given buffer.
+	fn caller_write(&mut self, offset: u32, buf_ptr: Pointer<u8>, buf_len: u32);
 }
 
 if_wasmtime_is_enabled! {

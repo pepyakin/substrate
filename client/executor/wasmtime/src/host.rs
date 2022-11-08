@@ -148,8 +148,30 @@ impl<'a> sp_wasm_interface::FunctionContext for HostContext<'a> {
 		self
 	}
 
+	fn ebpf(&mut self) -> &mut dyn sp_wasm_interface::Ebpf {
+		self
+	}
+
 	fn register_panic_error_message(&mut self, message: &str) {
 		self.host_state_mut().panic_message = Some(message.to_owned());
+	}
+}
+
+impl<'a> sp_wasm_interface::Ebpf for HostContext<'a> {
+	fn execute(&mut self, program: &[u8], input: &[u8]) -> Vec<u8> {
+		todo!()
+	}
+
+	/// If the calling code that is in turn was called by the EBPF program, this function will read
+	/// the memory of that program into the given buffer.
+	fn caller_read(&mut self, offset: u32, buf_ptr: Pointer<u8>, buf_len: u32) {
+		todo!()
+	}
+
+	/// If the calling code that is in turn was called by the EBPF program, this function will write
+	/// the memory of that program from the given buffer.
+	fn caller_write(&mut self, offset: u32, buf_ptr: Pointer<u8>, buf_len: u32) {
+		todo!()
 	}
 }
 

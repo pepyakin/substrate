@@ -139,6 +139,10 @@ impl FunctionContext for FunctionExecutor {
 		self
 	}
 
+	fn ebpf(&mut self) -> &mut dyn sp_wasm_interface::Ebpf {
+		todo!()
+	}
+
 	fn register_panic_error_message(&mut self, message: &str) {
 		self.panic_message = Some(message.to_owned());
 	}
