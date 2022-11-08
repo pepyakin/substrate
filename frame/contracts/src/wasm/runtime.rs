@@ -31,7 +31,7 @@ use frame_support::{dispatch::DispatchError, ensure, traits::Get, weights::Weigh
 use pallet_contracts_primitives::{ExecReturnValue, ReturnFlags};
 use pallet_contracts_proc_macro::define_env;
 use sp_core::crypto::UncheckedFrom;
-use sp_io::hashing::{blake2_128, blake2_256, keccak_256, sha2_256};
+use sp_io::{ebpf, hashing::{blake2_128, blake2_256, keccak_256, sha2_256}};
 use sp_runtime::traits::{Bounded, Zero};
 use sp_sandbox::SandboxMemory;
 use sp_std::prelude::*;
@@ -525,11 +525,7 @@ where
 	pub fn read_sandbox_memory(&self, ptr: u32, len: u32) -> Result<Vec<u8>, DispatchError> {
 		ensure!(len <= self.ext.schedule().limits.max_memory_size(), Error::<E::T>::OutOfBounds);
 		let mut buf = vec![0u8; len as usize];
-		/*
-		self.memory
-			.get(ptr, buf.as_mut_slice())
-			.map_err(|_| Error::<E::T>::OutOfBounds)?;
-		*/
+		self.read_sandbox_memory_into_buf(ptr, &mut buf);
 		Ok(buf)
 	}
 
@@ -543,7 +539,7 @@ where
 		ptr: u32,
 		buf: &mut [u8],
 	) -> Result<(), DispatchError> {
-		//self.memory.get(ptr, buf).map_err(|_| Error::<E::T>::OutOfBounds.into())
+		ebpf::caller_read(ptr.into(), buf.as_mut_ptr(), buf.len() as u32);
 		Ok(())
 	}
 
@@ -627,13 +623,8 @@ where
 			self.charge_gas(costs)?;
 		}
 
-		/*
-		self.memory
-			.set(out_ptr, buf)
-			.and_then(|_| self.memory.set(out_len_ptr, &buf_len.encode()))
-			.map_err(|_| Error::<E::T>::OutOfBounds)?;
-		*/
-
+		self.write_sandbox_memory(out_ptr, buf)?;
+		self.write_sandbox_memory(out_len_ptr, &buf_len.encode())?;
 		Ok(())
 	}
 
@@ -643,7 +634,7 @@ where
 	///
 	/// - designated area is not within the bounds of the sandbox memory.
 	fn write_sandbox_memory(&mut self, ptr: u32, buf: &[u8]) -> Result<(), DispatchError> {
-		//self.memory.set(ptr, buf).map_err(|_| Error::<E::T>::OutOfBounds.into())
+		ebpf::caller_write(ptr.into(), buf.as_ptr() as _, buf.len() as u32);
 		Ok(())
 	}
 
