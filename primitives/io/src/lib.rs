@@ -1656,37 +1656,7 @@ pub trait Sandbox {
 	}
 }
 
-#[cfg(feature = "std")]
-#[runtime_interface]
-pub trait Ebpf {
-	fn execute(
-		&mut self,
-		program: &[u8],
-		input: &[u8],
-		syscall_handler: u32,
-		state: u32,
-	) -> Vec<u8> {
-		drop((program, input, syscall_handler, state));
-		unimplemented!()
-	}
-
-	/// If the calling code that is in turn was called by the EBPF program, this function will read
-	/// the memory of that program into the given buffer.
-	fn caller_read(&mut self, offset: u64, buf_ptr: u32, buf_len: u32) {
-		drop((offset, buf_ptr, buf_len));
-		unimplemented!()
-	}
-
-	/// If the calling code that is in turn was called by the EBPF program, this function will write
-	/// the memory of that program from the given buffer.
-	fn caller_write(&mut self, offset: u64, buf_ptr: u32, buf_len: u32) {
-		drop((offset, buf_ptr, buf_len));
-		unimplemented!()
-	}
-}
-
 /// Sandbox but ebpf instead of wasm.
-#[cfg(not(feature = "std"))]
 #[runtime_interface(wasm_only)]
 pub trait Ebpf {
 	// TODO: Error handling
