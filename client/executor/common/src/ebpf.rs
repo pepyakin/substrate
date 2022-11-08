@@ -30,10 +30,18 @@ pub struct MemoryRef<'a, 'b> {
 
 /// This context is used for calling back into the supervisor.
 pub trait SupervisorContext {
-	fn supervisor_call(&mut self, memory_ref: MemoryRef<'_, '_>);
+	fn supervisor_call(
+		&mut self,
+		r1: u64,
+		r2: u64,
+		r3: u64,
+		r4: u64,
+		r5: u64,
+		memory_ref: MemoryRef<'_, '_>,
+	) -> u64;
 }
 
-pub fn execute(program: &[u8], input: &mut [u8], context: &mut impl SupervisorContext) {
+pub fn execute(program: &[u8], input: &mut [u8], context: &mut dyn SupervisorContext) {
 	let config = Config::default();
 	let mut syscall_registry = SyscallRegistry::default();
 	syscall_registry.register_syscall_by_name(b"abort", abort_syscall).unwrap();
@@ -44,24 +52,16 @@ pub fn execute(program: &[u8], input: &mut [u8], context: &mut impl SupervisorCo
 	let verified_executable =
 		VerifiedExecutable::<RequisiteVerifier, TestInstructionMeter>::from_executable(executable)
 			.unwrap();
-	let mut vm = EbpfVm::new(&verified_executable, &mut (), &mut [], vec![mem_region]).unwrap();
+	let mut vm =
+		EbpfVm::new(&verified_executable, &mut ProcessData { context }, &mut [], vec![mem_region])
+			.unwrap();
 	let res = vm
 		.execute_program_interpreted(&mut TestInstructionMeter { remaining: 1 })
 		.unwrap();
 }
 
 struct ProcessData<'a> {
-	meter: TestInstructionMeter,
 	context: &'a mut dyn SupervisorContext,
-}
-
-impl<'a> solana_rbpf::vm::InstructionMeter for ProcessData<'a> {
-	fn consume(&mut self, amount: u64) {
-		self.meter.consume(amount)
-	}
-	fn get_remaining(&self) -> u64 {
-		self.meter.get_remaining()
-	}
 }
 
 fn abort_syscall(
@@ -84,13 +84,21 @@ struct AbortError;
 
 fn ext_syscall(
 	process_data: &mut ProcessData,
-	_arg1: u64,
-	_arg2: u64,
-	_arg3: u64,
-	_arg4: u64,
-	_arg5: u64,
-	_memory_mapping: &mut MemoryMapping,
+	arg1: u64,
+	arg2: u64,
+	arg3: u64,
+	arg4: u64,
+	arg5: u64,
+	memory_mapping: &mut MemoryMapping,
 	result: &mut solana_rbpf::vm::ProgramResult,
 ) {
+	process_data.context.supervisor_call(
+		arg1,
+		arg2,
+		arg3,
+		arg4,
+		arg5,
+		MemoryRef { mapping: memory_mapping },
+	);
 	*result = solana_rbpf::vm::StableResult::Ok(0);
 }

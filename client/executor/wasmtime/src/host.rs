@@ -158,7 +158,36 @@ impl<'a> sp_wasm_interface::FunctionContext for HostContext<'a> {
 }
 
 impl<'a> sp_wasm_interface::Ebpf for HostContext<'a> {
-	fn execute(&mut self, program: &[u8], input: &[u8]) -> Vec<u8> {
+	fn execute(
+		&mut self,
+		program: &[u8],
+		input: &[u8],
+		syscall_handler: u32,
+		state: u32,
+	) -> sp_wasm_interface::Result<Vec<u8>> {
+		// Extract a syscall handler from the instance's table by the specified index.
+		let syscall_handler = {
+			let table = self
+				.caller
+				.data()
+				.table()
+				.ok_or("Runtime doesn't have a table; sandbox is unavailable")?;
+			let table_item = table.get(&mut self.caller, syscall_handler);
+
+			*table_item
+				.ok_or("dispatch_thunk_id is out of bounds")?
+				.funcref()
+				.ok_or("dispatch_thunk_idx should be a funcref")?
+				.ok_or("dispatch_thunk_idx should point to actual func")?
+		};
+
+		let mut input = input.to_vec();
+		sc_executor_common::ebpf::execute(
+			program,
+			&mut input,
+			&mut EbpfSupervisorContext { syscall_handler, host_context: self, state },
+		);
+
 		// let program = sc_executor_common::ebpf::Program::new(program);
 		todo!()
 	}
@@ -181,6 +210,42 @@ impl<'a> sp_wasm_interface::Ebpf for HostContext<'a> {
 		// 	Ok(buffer) => buffer,
 		// };
 		// self.ebpf_caller().expect("no epbf caller").write(offset, &buffer);
+	}
+}
+
+struct EbpfSupervisorContext<'a, 'b> {
+	syscall_handler: Func,
+	host_context: &'a mut HostContext<'b>,
+	state: u32,
+}
+
+impl<'a, 'b> sc_executor_common::ebpf::SupervisorContext for EbpfSupervisorContext<'a, 'b> {
+	fn supervisor_call(
+		&mut self,
+		r1: u64,
+		r2: u64,
+		r3: u64,
+		r4: u64,
+		r5: u64,
+		memory_ref: sc_executor_common::ebpf::MemoryRef<'_, '_>,
+	) -> u64 {
+		// TODO: stash the memory ref somehow I guess?
+		let mut rets = [Val::I64(0i64); 1];
+		self.syscall_handler
+			.call(
+				&mut self.host_context.caller,
+				&[
+					Val::I32(self.state as i32),
+					Val::I64(r1 as i64),
+					Val::I64(r2 as i64),
+					Val::I64(r3 as i64),
+					Val::I64(r4 as i64),
+					Val::I64(r5 as i64),
+				],
+				&mut rets,
+			)
+			.unwrap();
+		rets[0].unwrap_i64() as u64
 	}
 }
 

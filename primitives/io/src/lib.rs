@@ -1670,7 +1670,9 @@ pub trait Ebpf {
 		syscall_handler: u32,
 		state: u32,
 	) -> Vec<u8> {
-		self.ebpf().execute(program, input)
+		self.ebpf()
+			.execute(program, input, syscall_handler, state)
+			.expect("execution failed")
 	}
 
 	/// If the calling code that is in turn was called by the EBPF program, this function will read

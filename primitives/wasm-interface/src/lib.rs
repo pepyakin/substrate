@@ -388,7 +388,13 @@ pub trait Sandbox {
 pub trait Ebpf {
 	/// Executes the given EBPF program. The program is expected to be a valid ELF file. The program
 	/// takes input as a buffer.
-	fn execute(&mut self, program: &[u8], input: &[u8]) -> Vec<u8>;
+	fn execute(
+		&mut self,
+		program: &[u8],
+		input: &[u8],
+		syscall_handler: u32,
+		state: u32,
+	) -> Result<Vec<u8>>;
 
 	/// If the calling code that is in turn was called by the EBPF program, this function will read
 	/// the memory of that program into the given buffer.
