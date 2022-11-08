@@ -523,6 +523,7 @@ where
 		ptr: u64,
 		buf: &mut [u8],
 	) -> Result<(), DispatchError> {
+		#[cfg(not(feature = "std"))]
 		ebpf::caller_read(ptr, buf.as_mut_ptr() as usize as u32, buf.len() as u32);
 		Ok(())
 	}
@@ -618,6 +619,7 @@ where
 	///
 	/// - designated area is not within the bounds of the sandbox memory.
 	fn write_sandbox_memory(&mut self, ptr: u64, buf: &[u8]) -> Result<(), DispatchError> {
+		#[cfg(not(feature = "std"))]
 		ebpf::caller_write(ptr, buf.as_ptr() as usize as u32, buf.len() as u32);
 		Ok(())
 	}

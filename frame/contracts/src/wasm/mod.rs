@@ -254,6 +254,7 @@ where
 		// entrypoint.
 		let mut runtime = Runtime::new(ext, input_data);
 		let dispatch_thunk = runtime::dispatch_thunk::<E>;
+		#[cfg(not(feature = "std"))]
 		ebpf::execute(
 			&code,
 			function.identifier().as_bytes(),
