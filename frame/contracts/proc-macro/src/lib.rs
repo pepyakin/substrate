@@ -325,7 +325,10 @@ fn expand_env(def: &mut EnvDef) -> TokenStream2 {
 			};
 			let result = match r1 {
 				#impls
-				_ => panic!("TODO: register an error instead of panicing runtime"),
+				_ => {
+					ctx.set_trap_reason(crate::Error::<E::T>::UnknownSyscall.into());
+					Ok(0)
+				},
 			};
 			result.unwrap_or(0)
 		}
