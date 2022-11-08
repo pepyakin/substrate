@@ -101,7 +101,7 @@ impl<'a, 'b> sp_wasm_interface::HostFunctionRegistry for Registry<'a, 'b> {
 		caller: wasmtime::Caller<Self::State>,
 		callback: impl FnOnce(&mut dyn FunctionContext) -> R,
 	) -> R {
-		callback(&mut HostContext { caller, })
+		callback(&mut HostContext { caller })
 	}
 
 	fn register_static<Params, Results>(

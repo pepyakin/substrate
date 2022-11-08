@@ -30,7 +30,10 @@ use frame_support::{dispatch::DispatchError, ensure, traits::Get, weights::Weigh
 use pallet_contracts_primitives::{ExecReturnValue, ReturnFlags};
 use pallet_contracts_proc_macro::define_env;
 use sp_core::crypto::UncheckedFrom;
-use sp_io::{ebpf, hashing::{blake2_128, blake2_256, keccak_256, sha2_256}};
+use sp_io::{
+	ebpf,
+	hashing::{blake2_128, blake2_256, keccak_256, sha2_256},
+};
 use sp_runtime::traits::{Bounded, Zero};
 use sp_std::prelude::*;
 

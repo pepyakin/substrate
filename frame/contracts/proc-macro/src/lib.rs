@@ -337,7 +337,7 @@ fn expand_env(def: &mut EnvDef) -> TokenStream2 {
 
 fn expand_functions(def: &mut EnvDef) -> TokenStream2 {
 	let impls = def.host_funcs.iter().enumerate().map(|(idx, f)| {
-		// skip the context arg 
+		// skip the context arg
 		let params = f.item.sig.inputs.iter().skip(1);
 		let param_names = params.clone().filter_map(|arg| {
 			let FnArg::Typed(arg) = arg else {
@@ -352,12 +352,7 @@ fn expand_functions(def: &mut EnvDef) -> TokenStream2 {
 			Some(&arg.ty)
 		});
 		let idx = idx as u64;
-		let (module, name, body, output) = (
-			&f.module,
-			&f.name,
-			&f.item.block,
-			&f.item.sig.output
-		);
+		let (module, name, body, output) = (&f.module, &f.name, &f.item.block, &f.item.sig.output);
 		let unstable_feat = match module.as_str() {
 			"__unstable__" => quote! { #[cfg(feature = "unstable-interface")] },
 			_ => quote! {},

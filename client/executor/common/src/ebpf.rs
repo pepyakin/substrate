@@ -71,6 +71,19 @@ pub fn execute(program: &[u8], input: &mut [u8], context: &mut dyn SupervisorCon
 	let mut syscall_registry = SyscallRegistry::default();
 	syscall_registry.register_syscall_by_name(b"abort", abort_syscall).unwrap();
 	syscall_registry.register_syscall_by_name(b"ext_syscall", ext_syscall).unwrap();
+	syscall_registry
+		.register_syscall_by_name(b"sol_memcpy_", sol_memcpy_syscall)
+		.unwrap();
+	syscall_registry
+		.register_syscall_by_name(b"sol_memmove_", sol_memmove_syscall)
+		.unwrap();
+	syscall_registry
+		.register_syscall_by_name(b"sol_memset_", sol_memset_syscall)
+		.unwrap();
+	syscall_registry
+		.register_syscall_by_name(b"sol_memcmp_", sol_memcmp_syscall)
+		.unwrap();
+
 	let executable =
 		Executable::<TestInstructionMeter>::from_elf(program, config, syscall_registry).unwrap();
 	let mem_region = MemoryRegion::new_writable(input, ebpf::MM_INPUT_START);
@@ -125,5 +138,83 @@ fn ext_syscall(
 		arg5,
 		MemoryRef { mapping: memory_mapping },
 	);
+	*result = solana_rbpf::vm::StableResult::Ok(0);
+}
+
+// pub fn sol_memcpy_(dest: *mut u8, src: *const u8, n: u64);
+fn sol_memcpy_syscall(
+	_process_data: &mut ProcessData,
+	dest: u64,
+	src: u64,
+	n: u64,
+	_arg4: u64,
+	_arg5: u64,
+	memory_mapping: &mut MemoryMapping,
+	result: &mut solana_rbpf::vm::ProgramResult,
+) {
+	let mut buf = vec![0u8; n as usize];
+	let mut memory_ref = MemoryRef { mapping: memory_mapping };
+	memory_ref.read(src, &mut buf);
+	memory_ref.write(dest, &buf);
+	*result = solana_rbpf::vm::StableResult::Ok(0);
+}
+
+// pub fn sol_memmove_(dest: *mut u8, src: *const u8, n: u64);
+fn sol_memmove_syscall(
+	_process_data: &mut ProcessData,
+	dest: u64,
+	src: u64,
+	n: u64,
+	_arg4: u64,
+	_arg5: u64,
+	memory_mapping: &mut MemoryMapping,
+	result: &mut solana_rbpf::vm::ProgramResult,
+) {
+	let mut buf = vec![0u8; n as usize];
+	let mut memory_ref = MemoryRef { mapping: memory_mapping };
+	memory_ref.read(src, &mut buf);
+	memory_ref.write(dest, &buf);
+	*result = solana_rbpf::vm::StableResult::Ok(0);
+}
+
+// pub fn sol_memset_(s: *mut u8, c: u8, n: u64);
+fn sol_memset_syscall(
+	_process_data: &mut ProcessData,
+	s: u64,
+	c: u64,
+	n: u64,
+	_arg4: u64,
+	_arg5: u64,
+	memory_mapping: &mut MemoryMapping,
+	result: &mut solana_rbpf::vm::ProgramResult,
+) {
+	let buf = vec![c as u8; n as usize];
+	let mut memory_ref = MemoryRef { mapping: memory_mapping };
+	memory_ref.write(s, &buf);
+	*result = solana_rbpf::vm::StableResult::Ok(0);
+}
+
+// pub fn sol_memcmp_(s1: *const u8, s2: *const u8, n: u64, result: *mut i32);
+fn sol_memcmp_syscall(
+	_process_data: &mut ProcessData,
+	s1: u64,
+	s2: u64,
+	n: u64,
+	result_ptr: u64,
+	_arg5: u64,
+	memory_mapping: &mut MemoryMapping,
+	result: &mut solana_rbpf::vm::ProgramResult,
+) {
+	use std::cmp::Ordering;
+	let mut buf1 = vec![0u8; n as usize];
+	let mut buf2 = vec![0u8; n as usize];
+	let mut memory_ref = MemoryRef { mapping: memory_mapping };
+	memory_ref.read(s1, &mut buf1);
+	memory_ref.read(s2, &mut buf2);
+	match buf1.cmp(&buf2) {
+		Ordering::Less => memory_ref.write(result_ptr, &(-1i32).to_le_bytes()),
+		Ordering::Equal => memory_ref.write(result_ptr, &(0i32).to_le_bytes()),
+		Ordering::Greater => memory_ref.write(result_ptr, &(1i32).to_le_bytes()),
+	}
 	*result = solana_rbpf::vm::StableResult::Ok(0);
 }

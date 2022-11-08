@@ -549,32 +549,19 @@ fn execute_ebpf(program: &[u8]) {
 			1 => {
 				let counter = unsafe { COUNTER };
 				let buf = counter.to_le_bytes();
-				sp_io::ebpf::caller_write(
-					r2 as u64,
-					buf.as_ptr() as u32,
-					buf.len() as u32,
-				);
+				sp_io::ebpf::caller_write(r2 as u64, buf.as_ptr() as u32, buf.len() as u32);
 				0
-			}
+			},
 			2 => {
 				let mut buf = [0u8; 8];
-				sp_io::ebpf::caller_read(
-					r2 as u64,
-					buf.as_mut_ptr() as u32,
-					buf.len() as u32,
-				);
+				sp_io::ebpf::caller_read(r2 as u64, buf.as_mut_ptr() as u32, buf.len() as u32);
 				let counter = u64::from_le_bytes(buf);
 				unsafe { COUNTER = counter };
 				0
-			}
+			},
 			_ => panic!("unknown syscall: {}", r1),
 		}
 	}
-	sp_io::ebpf::execute(
-		program,
-		&[],
-		syscall_handler as usize as u32,
-		0x1337,
-	);
+	sp_io::ebpf::execute(program, &[], syscall_handler as usize as u32, 0x1337);
 	assert_eq!(unsafe { COUNTER }, 1);
 }
