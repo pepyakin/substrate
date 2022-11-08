@@ -563,5 +563,6 @@ fn execute_ebpf(program: &[u8]) {
 		}
 	}
 	sp_io::ebpf::execute(program, &[], syscall_handler as usize as u32, 0x1337);
+
 	assert_eq!(unsafe { COUNTER }, 1);
 }

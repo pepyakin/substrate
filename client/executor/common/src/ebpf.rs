@@ -17,12 +17,15 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use solana_rbpf::{
-	ebpf,
+	aligned_memory::AlignedMemory,
+	ebpf::{self, HOST_ALIGN},
 	elf::Executable,
 	memory_region::{AccessType, MemoryMapping, MemoryRegion},
 	verifier::RequisiteVerifier,
 	vm::{Config, EbpfVm, SyscallRegistry, TestInstructionMeter, VerifiedExecutable},
 };
+
+const HEAP_SIZE: usize = 16 * 65536;
 
 pub struct MemoryRef<'a, 'b> {
 	mapping: &'a mut MemoryMapping<'b>,
@@ -102,15 +105,18 @@ pub fn execute(program: &[u8], input: &mut [u8], context: &mut dyn SupervisorCon
 
 	let executable =
 		Executable::<TestInstructionMeter>::from_elf(program, config, syscall_registry).unwrap();
-	let mem_region = MemoryRegion::new_writable(input, ebpf::MM_INPUT_START);
+	let region_input = MemoryRegion::new_writable(input, ebpf::MM_INPUT_START);
+
 	let verified_executable =
 		VerifiedExecutable::<RequisiteVerifier, TestInstructionMeter>::from_executable(executable)
 			.unwrap();
+
+	let mut heap = AlignedMemory::<{ HOST_ALIGN }>::zero_filled(HEAP_SIZE);
 	let mut vm = EbpfVm::new(
 		&verified_executable,
 		&mut ProcessData { context, next: 0x300000000 },
-		&mut [],
-		vec![mem_region],
+		heap.as_slice_mut(),
+		vec![region_input],
 	)
 	.unwrap();
 	let _res = vm
@@ -260,7 +266,7 @@ fn sol_alloc_free_syscall(
 	_arg3: u64,
 	_arg4: u64,
 	_arg5: u64,
-	memory_mapping: &mut MemoryMapping,
+	_memory_mapping: &mut MemoryMapping,
 	result: &mut solana_rbpf::vm::ProgramResult,
 ) {
 	if free_addr == 0 {
