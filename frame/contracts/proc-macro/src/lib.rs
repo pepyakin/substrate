@@ -349,13 +349,17 @@ impl EnvDef {
 ///  - implementations of the host functions to be added to the wasm runtime environment (see
 ///    `expand_impls()`).
 fn expand_env(def: &mut EnvDef) -> proc_macro2::TokenStream {
-	let can_satisfy = expand_can_satisfy(def);
 	let impls = expand_impls(def);
 
 	quote! {
-		pub struct Env;
-		#can_satisfy
-		#impls
+		pub extern "C" fn dispatch_thunk<HostState>(ctx: u32, r1: u64, r2: u64, r3: u64, r4: u64, r5: u64) -> u64 {
+			let ctx = unsafe {
+				&mut *(ctx as *mut HostState)
+			};
+			match r1 {
+				_ => panic!("TODO: register an error instead of panicing runtime"),
+			}
+		}
 	}
 }
 

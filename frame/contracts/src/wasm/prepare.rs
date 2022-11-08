@@ -404,22 +404,23 @@ fn check_and_instrument<C: ImportSatisfyCheck, T: Config>(
 	result
 }
 
-fn do_preparation<C: ImportSatisfyCheck, T: Config>(
+fn do_preparation<T: Config>(
 	original_code: CodeVec<T>,
 	schedule: &Schedule<T>,
 	owner: AccountIdOf<T>,
 	determinism: Determinism,
 ) -> Result<PrefabWasmModule<T>, (DispatchError, &'static str)> {
-	let (code, (initial, maximum)) =
-		check_and_instrument::<C, T>(original_code.as_ref(), schedule, determinism)
-			.map_err(|msg| (<Error<T>>::CodeRejected.into(), msg))?;
 	let original_code_len = original_code.len();
 
 	let mut module = PrefabWasmModule {
 		instruction_weights_version: schedule.instruction_weights.version,
-		initial,
-		maximum,
-		code: code.try_into().map_err(|_| (<Error<T>>::CodeTooLarge.into(), ""))?,
+		initial: 0,
+		maximum: 0,
+		code: original_code
+			.clone()
+			.into_inner()
+			.try_into()
+			.map_err(|_| (<Error<T>>::CodeTooLarge.into(), ""))?,
 		determinism,
 		code_hash: T::Hashing::hash(&original_code),
 		original_code: Some(original_code),
@@ -458,7 +459,7 @@ pub fn prepare_contract<T: Config>(
 	owner: AccountIdOf<T>,
 	determinism: Determinism,
 ) -> Result<PrefabWasmModule<T>, (DispatchError, &'static str)> {
-	do_preparation::<super::runtime::Env, T>(original_code, schedule, owner, determinism)
+	do_preparation::<T>(original_code, schedule, owner, determinism)
 }
 
 /// The same as [`prepare_contract`] but without constructing a new [`PrefabWasmModule`]
@@ -468,10 +469,10 @@ pub fn prepare_contract<T: Config>(
 /// Use this when an existing contract should be re-instrumented with a newer schedule version.
 pub fn reinstrument_contract<T: Config>(
 	original_code: &[u8],
-	schedule: &Schedule<T>,
-	determinism: Determinism,
+	_schedule: &Schedule<T>,
+	_determinism: Determinism,
 ) -> Result<Vec<u8>, &'static str> {
-	Ok(check_and_instrument::<super::runtime::Env, T>(original_code, schedule, determinism)?.0)
+	Ok(original_code.to_vec())
 }
 
 /// Alternate (possibly unsafe) preparation functions used only for benchmarking.

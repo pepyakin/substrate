@@ -169,7 +169,7 @@ pub(crate) fn create_store(engine: &wasmtime::Engine, max_memory_size: Option<us
 	};
 
 	let mut store =
-		Store::new(engine, StoreData { limits, host_state: None, memory: None, table: None, });
+		Store::new(engine, StoreData { limits, host_state: None, memory: None, table: None });
 	if max_memory_size.is_some() {
 		store.limiter(|s| &mut s.limits);
 	}
@@ -326,11 +326,7 @@ fn get_table(instance: &Instance, ctx: &mut Store) -> Option<Table> {
 }
 
 fn get_ext_syscall(instance: &Instance, ctx: &mut Store) -> Option<Func> {
-	instance
-		.get_export(ctx, "ext_syscall")
-		.as_ref()
-		.and_then(extern_func)
-		.cloned()
+	instance.get_export(ctx, "ext_syscall").as_ref().and_then(extern_func).cloned()
 }
 
 /// Functions related to memory.

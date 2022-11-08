@@ -21,9 +21,9 @@
 #![warn(missing_docs)]
 #![deny(unused_crate_dependencies)]
 
+pub mod ebpf;
 pub mod error;
 pub mod runtime_blob;
 pub mod sandbox;
 pub mod util;
 pub mod wasm_runtime;
-pub mod ebpf;

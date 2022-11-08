@@ -17,13 +17,12 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use solana_rbpf::{
-    ebpf,
-    elf::{register_bpf_function, Executable},
-    memory_region::{MemoryMapping, MemoryRegion},
-    verifier::RequisiteVerifier,
-    vm::{Config, EbpfVm, SyscallRegistry, TestInstructionMeter, VerifiedExecutable},
+	ebpf,
+	elf::{register_bpf_function, Executable},
+	memory_region::{MemoryMapping, MemoryRegion},
+	verifier::RequisiteVerifier,
+	vm::{Config, EbpfVm, SyscallRegistry, TestInstructionMeter, VerifiedExecutable},
 };
-
 
 pub struct MemoryRef<'a, 'b> {
 	mapping: &'a mut MemoryMapping<'b>,
@@ -37,12 +36,8 @@ pub trait SupervisorContext {
 pub fn execute(program: &[u8], input: &mut [u8], context: &mut impl SupervisorContext) {
 	let config = Config::default();
 	let mut syscall_registry = SyscallRegistry::default();
-	syscall_registry
-		.register_syscall_by_name(b"abort", abort_syscall)
-		.unwrap();
-	syscall_registry
-		.register_syscall_by_name(b"ext_syscall", ext_syscall)
-		.unwrap();
+	syscall_registry.register_syscall_by_name(b"abort", abort_syscall).unwrap();
+	syscall_registry.register_syscall_by_name(b"ext_syscall", ext_syscall).unwrap();
 	let mut executable =
 		Executable::<TestInstructionMeter>::from_elf(program, config, syscall_registry).unwrap();
 	let mem_region = MemoryRegion::new_writable(input, ebpf::MM_INPUT_START);
@@ -70,19 +65,17 @@ impl<'a> solana_rbpf::vm::InstructionMeter for ProcessData<'a> {
 }
 
 fn abort_syscall(
-    _invoke_context: &mut ProcessData,
-    _arg1: u64,
-    _arg2: u64,
-    _arg3: u64,
-    _arg4: u64,
-    _arg5: u64,
-    _memory_mapping: &mut MemoryMapping,
-    result: &mut solana_rbpf::vm::ProgramResult,
+	_invoke_context: &mut ProcessData,
+	_arg1: u64,
+	_arg2: u64,
+	_arg3: u64,
+	_arg4: u64,
+	_arg5: u64,
+	_memory_mapping: &mut MemoryMapping,
+	result: &mut solana_rbpf::vm::ProgramResult,
 ) {
-    let err = solana_rbpf::error::EbpfError::UserError(Box::new(
-        AbortError
-    ));
-    *result = solana_rbpf::vm::StableResult::Err(err);
+	let err = solana_rbpf::error::EbpfError::UserError(Box::new(AbortError));
+	*result = solana_rbpf::vm::StableResult::Err(err);
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -90,14 +83,14 @@ fn abort_syscall(
 struct AbortError;
 
 fn ext_syscall(
-    process_data: &mut ProcessData,
-    _arg1: u64,
-    _arg2: u64,
-    _arg3: u64,
-    _arg4: u64,
-    _arg5: u64,
-    _memory_mapping: &mut MemoryMapping,
-    result: &mut solana_rbpf::vm::ProgramResult,
+	process_data: &mut ProcessData,
+	_arg1: u64,
+	_arg2: u64,
+	_arg3: u64,
+	_arg4: u64,
+	_arg5: u64,
+	_memory_mapping: &mut MemoryMapping,
+	result: &mut solana_rbpf::vm::ProgramResult,
 ) {
-    *result = solana_rbpf::vm::StableResult::Ok(0);
+	*result = solana_rbpf::vm::StableResult::Ok(0);
 }

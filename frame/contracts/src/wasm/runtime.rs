@@ -442,7 +442,6 @@ fn already_charged(_: u32) -> Option<RuntimeCosts> {
 pub struct Runtime<'a, E: Ext + 'a> {
 	ext: &'a mut E,
 	input_data: Option<Vec<u8>>,
-	memory: sp_sandbox::default_executor::Memory,
 	trap_reason: Option<TrapReason>,
 	chain_extension: Option<Box<<E::T as Config>::ChainExtension>>,
 }
@@ -453,15 +452,10 @@ where
 	<E::T as frame_system::Config>::AccountId:
 		UncheckedFrom<<E::T as frame_system::Config>::Hash> + AsRef<[u8]>,
 {
-	pub fn new(
-		ext: &'a mut E,
-		input_data: Vec<u8>,
-		memory: sp_sandbox::default_executor::Memory,
-	) -> Self {
+	pub fn new(ext: &'a mut E, input_data: Vec<u8>) -> Self {
 		Runtime {
 			ext,
 			input_data: Some(input_data),
-			memory,
 			trap_reason: None,
 			chain_extension: Some(Box::new(Default::default())),
 		}
@@ -472,10 +466,7 @@ where
 	/// It evaluates information stored in the `trap_reason` variable of the runtime and
 	/// bases the outcome on the value if this variable. Only if `trap_reason` is `None`
 	/// the result of the sandbox is evaluated.
-	pub fn to_execution_result(
-		self,
-		sandbox_result: Result<sp_sandbox::ReturnValue, sp_sandbox::Error>,
-	) -> ExecResult {
+	pub fn to_execution_result(self) -> ExecResult {
 		// If a trap reason is set we base our decision solely on that.
 		if let Some(trap_reason) = self.trap_reason {
 			return match trap_reason {
@@ -490,22 +481,7 @@ where
 				TrapReason::SupervisorError(error) => return Err(error.into()),
 			}
 		}
-
-		// Check the exact type of the error.
-		match sandbox_result {
-			// No traps were generated. Proceed normally.
-			Ok(_) => Ok(ExecReturnValue { flags: ReturnFlags::empty(), data: Vec::new() }),
-			// `Error::Module` is returned only if instantiation or linking failed (i.e.
-			// wasm binary tried to import a function that is not provided by the host).
-			// This shouldn't happen because validation process ought to reject such binaries.
-			//
-			// Because panics are really undesirable in the runtime code, we treat this as
-			// a trap for now. Eventually, we might want to revisit this.
-			Err(sp_sandbox::Error::Module) => return Err("validation error".into()),
-			// Any other kind of a trap should result in a failure.
-			Err(sp_sandbox::Error::Execution) | Err(sp_sandbox::Error::OutOfBounds) =>
-				return Err(Error::<E::T>::ContractTrapped.into()),
-		}
+		Ok(ExecReturnValue { flags: ReturnFlags::empty(), data: Vec::new() })
 	}
 
 	/// Get a mutable reference to the inner `Ext`.
@@ -549,9 +525,11 @@ where
 	pub fn read_sandbox_memory(&self, ptr: u32, len: u32) -> Result<Vec<u8>, DispatchError> {
 		ensure!(len <= self.ext.schedule().limits.max_memory_size(), Error::<E::T>::OutOfBounds);
 		let mut buf = vec![0u8; len as usize];
+		/*
 		self.memory
 			.get(ptr, buf.as_mut_slice())
 			.map_err(|_| Error::<E::T>::OutOfBounds)?;
+		*/
 		Ok(buf)
 	}
 
@@ -565,7 +543,8 @@ where
 		ptr: u32,
 		buf: &mut [u8],
 	) -> Result<(), DispatchError> {
-		self.memory.get(ptr, buf).map_err(|_| Error::<E::T>::OutOfBounds.into())
+		//self.memory.get(ptr, buf).map_err(|_| Error::<E::T>::OutOfBounds.into())
+		Ok(())
 	}
 
 	/// Reads and decodes a type with a size fixed at compile time from contract memory.
@@ -648,10 +627,12 @@ where
 			self.charge_gas(costs)?;
 		}
 
+		/*
 		self.memory
 			.set(out_ptr, buf)
 			.and_then(|_| self.memory.set(out_len_ptr, &buf_len.encode()))
 			.map_err(|_| Error::<E::T>::OutOfBounds)?;
+		*/
 
 		Ok(())
 	}
@@ -662,7 +643,8 @@ where
 	///
 	/// - designated area is not within the bounds of the sandbox memory.
 	fn write_sandbox_memory(&mut self, ptr: u32, buf: &[u8]) -> Result<(), DispatchError> {
-		self.memory.set(ptr, buf).map_err(|_| Error::<E::T>::OutOfBounds.into())
+		//self.memory.set(ptr, buf).map_err(|_| Error::<E::T>::OutOfBounds.into())
+		Ok(())
 	}
 
 	/// Computes the given hash function on the supplied input.

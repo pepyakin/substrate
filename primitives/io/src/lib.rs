@@ -1663,23 +1663,26 @@ pub trait Ebpf {
 
 	/// Executes the given EBPF program. The program is expected to be a valid ELF file. The program
 	/// takes input as a buffer.
-	fn execute(&mut self, program: &[u8], input: &[u8], syscall_handler: u32, state: u32) -> Vec<u8> {
-		self.ebpf()
-			.execute(program, input)
+	fn execute(
+		&mut self,
+		program: &[u8],
+		input: &[u8],
+		syscall_handler: u32,
+		state: u32,
+	) -> Vec<u8> {
+		self.ebpf().execute(program, input)
 	}
 
 	/// If the calling code that is in turn was called by the EBPF program, this function will read
 	/// the memory of that program into the given buffer.
 	fn caller_read(&mut self, offset: u32, buf_ptr: Pointer<u8>, buf_len: u32) {
-		self.ebpf()
-			.caller_read(offset, buf_ptr, buf_len)
+		self.ebpf().caller_read(offset, buf_ptr, buf_len)
 	}
 
 	/// If the calling code that is in turn was called by the EBPF program, this function will write
 	/// the memory of that program from the given buffer.
 	fn caller_write(&mut self, offset: u32, buf_ptr: Pointer<u8>, buf_len: u32) {
-		self.ebpf()
-			.caller_write(offset, buf_ptr, buf_len)
+		self.ebpf().caller_write(offset, buf_ptr, buf_len)
 	}
 }
 
