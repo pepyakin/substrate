@@ -18,8 +18,6 @@
 //! This module provides a means for executing contracts
 //! represented in wasm.
 
-#[macro_use]
-mod env_def;
 mod code_cache;
 mod prepare;
 mod runtime;
@@ -30,7 +28,6 @@ pub use crate::wasm::runtime::{CallFlags, ReturnCode, Runtime, RuntimeCosts};
 use crate::{
 	exec::{ExecResult, Executable, ExportedFunction, Ext},
 	gas::GasMeter,
-	wasm::env_def::FunctionImplProvider,
 	AccountIdOf, BalanceOf, CodeHash, CodeStorage, CodeVec, Config, Error, RelaxedCodeVec,
 	Schedule,
 };
@@ -39,7 +36,6 @@ use frame_support::dispatch::{DispatchError, DispatchResult};
 use sp_core::crypto::UncheckedFrom;
 use sp_io::ebpf;
 use sp_runtime::RuntimeDebug;
-use sp_sandbox::{SandboxEnvironmentBuilder, SandboxInstance, SandboxMemory};
 use sp_std::prelude::*;
 #[cfg(test)]
 pub use tests::MockExt;
@@ -257,7 +253,7 @@ where
 		// Instantiate the instance from the instrumented module code and invoke the contract
 		// entrypoint.
 		let mut runtime = Runtime::new(ext, input_data);
-		let dispatch_thunk = runtime::dispatch_thunk::<Runtime<E>>;
+		let dispatch_thunk = runtime::dispatch_thunk::<E>;
 		ebpf::execute(
 			&code,
 			function.identifier().as_bytes(),

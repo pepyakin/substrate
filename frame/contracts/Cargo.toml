@@ -42,7 +42,6 @@ sp-api = { version = "4.0.0-dev", default-features = false, path = "../../primit
 sp-core = { version = "6.0.0", default-features = false, path = "../../primitives/core" }
 sp-io = { version = "6.0.0", default-features = false, path = "../../primitives/io" }
 sp-runtime = { version = "6.0.0", default-features = false, path = "../../primitives/runtime" }
-sp-sandbox = { version = "0.10.0-dev", default-features = false, path = "../../primitives/sandbox" }
 sp-std = { version = "4.0.0", default-features = false, path = "../../primitives/std" }
 
 [dev-dependencies]
@@ -69,7 +68,6 @@ std = [
 	"sp-runtime/std",
 	"sp-io/std",
 	"sp-std/std",
-	"sp-sandbox/std",
 	"frame-benchmarking?/std",
 	"frame-support/std",
 	"frame-system/std",

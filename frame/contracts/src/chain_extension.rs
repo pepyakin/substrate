@@ -271,10 +271,10 @@ impl<'a, 'b, E: Ext> Environment<'a, 'b, E, InitState> {
 	pub(crate) fn new(
 		runtime: &'a mut Runtime<'b, E>,
 		id: u32,
-		input_ptr: u32,
+		input_ptr: u64,
 		input_len: u32,
-		output_ptr: u32,
-		output_len_ptr: u32,
+		output_ptr: u64,
+		output_len_ptr: u64,
 	) -> Self {
 		Environment {
 			inner: Inner { runtime, id, input_ptr, input_len, output_ptr, output_len_ptr },
@@ -301,7 +301,7 @@ impl<'a, 'b, E: Ext> Environment<'a, 'b, E, InitState> {
 /// Functions to use the input arguments as integers.
 impl<'a, 'b, E: Ext, S: PrimIn> Environment<'a, 'b, E, S> {
 	/// The `input_ptr` argument.
-	pub fn val0(&self) -> u32 {
+	pub fn val0(&self) -> u64 {
 		self.inner.input_ptr
 	}
 
@@ -314,12 +314,12 @@ impl<'a, 'b, E: Ext, S: PrimIn> Environment<'a, 'b, E, S> {
 /// Functions to use the output arguments as integers.
 impl<'a, 'b, E: Ext, S: PrimOut> Environment<'a, 'b, E, S> {
 	/// The `output_ptr` argument.
-	pub fn val2(&self) -> u32 {
+	pub fn val2(&self) -> u64 {
 		self.inner.output_ptr
 	}
 
 	/// The `output_len_ptr` argument.
-	pub fn val3(&self) -> u32 {
+	pub fn val3(&self) -> u64 {
 		self.inner.output_len_ptr
 	}
 }
@@ -429,13 +429,13 @@ struct Inner<'a, 'b, E: Ext> {
 	/// Verbatim argument passed to `seal_call_chain_extension`.
 	id: u32,
 	/// Verbatim argument passed to `seal_call_chain_extension`.
-	input_ptr: u32,
+	input_ptr: u64,
 	/// Verbatim argument passed to `seal_call_chain_extension`.
 	input_len: u32,
 	/// Verbatim argument passed to `seal_call_chain_extension`.
-	output_ptr: u32,
+	output_ptr: u64,
 	/// Verbatim argument passed to `seal_call_chain_extension`.
-	output_len_ptr: u32,
+	output_len_ptr: u64,
 }
 
 /// Any state of an [`Environment`] implements this trait.

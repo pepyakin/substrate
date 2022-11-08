@@ -5429,7 +5429,6 @@ dependencies = [
  "sp-io",
  "sp-keystore",
  "sp-runtime",
- "sp-sandbox",
  "sp-std",
  "wasm-instrument",
  "wasmi-validation",

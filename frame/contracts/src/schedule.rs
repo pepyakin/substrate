@@ -671,7 +671,7 @@ struct ScheduleRules<'a, T: Config> {
 }
 
 impl<T: Config> Schedule<T> {
-	pub(crate) fn rules(
+	pub(crate) fn _rules(
 		&self,
 		module: &elements::Module,
 		determinism: Determinism,
