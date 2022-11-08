@@ -1663,7 +1663,7 @@ pub trait Ebpf {
 
 	/// Executes the given EBPF program. The program is expected to be a valid ELF file. The program
 	/// takes input as a buffer.
-	fn execute(&mut self, program: &[u8], input: &[u8]) -> Vec<u8> {
+	fn execute(&mut self, program: &[u8], input: &[u8], syscall_handler: u32, state: u32) -> Vec<u8> {
 		self.ebpf()
 			.execute(program, input)
 	}

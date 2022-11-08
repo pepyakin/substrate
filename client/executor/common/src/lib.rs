@@ -26,3 +26,4 @@ pub mod runtime_blob;
 pub mod sandbox;
 pub mod util;
 pub mod wasm_runtime;
+pub mod ebpf;

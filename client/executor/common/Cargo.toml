@@ -24,6 +24,7 @@ sc-allocator = { version = "4.1.0-dev", path = "../../allocator" }
 sp-maybe-compressed-blob = { version = "4.1.0-dev", path = "../../../primitives/maybe-compressed-blob" }
 sp-sandbox = { version = "0.10.0-dev", path = "../../../primitives/sandbox" }
 sp-wasm-interface = { version = "6.0.0", path = "../../../primitives/wasm-interface" }
+solana_rbpf = "0.2.35"
 
 [features]
 default = []
