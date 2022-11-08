@@ -583,7 +583,7 @@ mod tests {
 					},
 					.. Default::default()
 				};
-				let r = do_preparation::<env::Env, Test>(wasm, &schedule, ALICE, Determinism::Deterministic);
+				let r = do_preparation::<Test>(wasm, &schedule, ALICE, Determinism::Deterministic);
 				assert_matches::assert_matches!(r.map_err(|(_, msg)| msg), $($expected)*);
 			}
 		};
