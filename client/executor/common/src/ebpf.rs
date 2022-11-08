@@ -71,6 +71,8 @@ pub fn execute(program: &[u8], input: &mut [u8], context: &mut dyn SupervisorCon
 	let mut syscall_registry = SyscallRegistry::default();
 	syscall_registry.register_syscall_by_name(b"abort", abort_syscall).unwrap();
 	syscall_registry.register_syscall_by_name(b"ext_syscall", ext_syscall).unwrap();
+
+	// memcpy and friends
 	syscall_registry
 		.register_syscall_by_name(b"sol_memcpy_", sol_memcpy_syscall)
 		.unwrap();
@@ -84,15 +86,33 @@ pub fn execute(program: &[u8], input: &mut [u8], context: &mut dyn SupervisorCon
 		.register_syscall_by_name(b"sol_memcmp_", sol_memcmp_syscall)
 		.unwrap();
 
+	// allocation
+	syscall_registry
+		.register_syscall_by_name(b"sol_alloc_free_", sol_alloc_free_syscall)
+		.unwrap();
+
+	// panics and logs
+	syscall_registry
+		.register_syscall_by_name(b"sol_panic_", sol_panic_syscall)
+		.unwrap();
+	syscall_registry.register_syscall_by_name(b"sol_log_", sol_log_syscall).unwrap();
+	syscall_registry
+		.register_syscall_by_name(b"custom_panic", custom_panic_syscall)
+		.unwrap();
+
 	let executable =
 		Executable::<TestInstructionMeter>::from_elf(program, config, syscall_registry).unwrap();
 	let mem_region = MemoryRegion::new_writable(input, ebpf::MM_INPUT_START);
 	let verified_executable =
 		VerifiedExecutable::<RequisiteVerifier, TestInstructionMeter>::from_executable(executable)
 			.unwrap();
-	let mut vm =
-		EbpfVm::new(&verified_executable, &mut ProcessData { context }, &mut [], vec![mem_region])
-			.unwrap();
+	let mut vm = EbpfVm::new(
+		&verified_executable,
+		&mut ProcessData { context, next: 0x300000000 },
+		&mut [],
+		vec![mem_region],
+	)
+	.unwrap();
 	let _res = vm
 		.execute_program_interpreted(&mut TestInstructionMeter { remaining: 100_000_000 })
 		.unwrap();
@@ -100,6 +120,7 @@ pub fn execute(program: &[u8], input: &mut [u8], context: &mut dyn SupervisorCon
 
 struct ProcessData<'a> {
 	context: &'a mut dyn SupervisorContext,
+	next: u64,
 }
 
 fn abort_syscall(
@@ -119,6 +140,19 @@ fn abort_syscall(
 #[derive(thiserror::Error, Debug)]
 #[error("abort")]
 struct AbortError;
+
+#[derive(thiserror::Error, Debug)]
+#[error("panic")]
+struct PanicError {
+	file: u64,
+	len: u64,
+	line: u64,
+	column: u64,
+}
+
+#[derive(thiserror::Error, Debug)]
+#[error("custom panic")]
+struct CustomPanic;
 
 fn ext_syscall(
 	process_data: &mut ProcessData,
@@ -217,4 +251,70 @@ fn sol_memcmp_syscall(
 		Ordering::Greater => memory_ref.write(result_ptr, &(1i32).to_le_bytes()),
 	}
 	*result = solana_rbpf::vm::StableResult::Ok(0);
+}
+
+fn sol_alloc_free_syscall(
+	process_data: &mut ProcessData,
+	size: u64,
+	free_addr: u64,
+	_arg3: u64,
+	_arg4: u64,
+	_arg5: u64,
+	memory_mapping: &mut MemoryMapping,
+	result: &mut solana_rbpf::vm::ProgramResult,
+) {
+	if free_addr == 0 {
+		let addr = process_data.next;
+		process_data.next += size;
+		*result = solana_rbpf::vm::StableResult::Ok(addr as u64);
+	} else {
+		// do nothing
+		*result = solana_rbpf::vm::StableResult::Ok(0);
+	}
+}
+
+fn sol_panic_syscall(
+	_process_data: &mut ProcessData,
+	file: u64,
+	len: u64,
+	line: u64,
+	column: u64,
+	_arg5: u64,
+	_memory_mapping: &mut MemoryMapping,
+	result: &mut solana_rbpf::vm::ProgramResult,
+) {
+	let err =
+		solana_rbpf::error::EbpfError::UserError(Box::new(PanicError { file, len, line, column }));
+	*result = solana_rbpf::vm::StableResult::Err(err);
+}
+
+fn sol_log_syscall(
+	_process_data: &mut ProcessData,
+	data: u64,
+	len: u64,
+	_arg3: u64,
+	_arg4: u64,
+	_arg5: u64,
+	memory_mapping: &mut MemoryMapping,
+	result: &mut solana_rbpf::vm::ProgramResult,
+) {
+	let mut buf = vec![0u8; len as usize];
+	let mut memory_ref = MemoryRef { mapping: memory_mapping };
+	memory_ref.read(data, &mut buf);
+	println!("{}", String::from_utf8(buf).unwrap());
+	*result = solana_rbpf::vm::StableResult::Ok(0);
+}
+
+fn custom_panic_syscall(
+	_process_data: &mut ProcessData,
+	_arg1: u64,
+	_arg2: u64,
+	_arg3: u64,
+	_arg4: u64,
+	_arg5: u64,
+	_memory_mapping: &mut MemoryMapping,
+	result: &mut solana_rbpf::vm::ProgramResult,
+) {
+	let err = solana_rbpf::error::EbpfError::UserError(Box::new(CustomPanic));
+	*result = solana_rbpf::vm::StableResult::Err(err);
 }
