@@ -1,4 +1,7 @@
-use solana_rbpf::{memory_region::MemoryMapping, vm::SyscallRegistry};
+use solana_rbpf::{
+	memory_region::MemoryMapping,
+	vm::{InstructionMeter, SyscallRegistry},
+};
 
 use super::{MemoryRef, ProcessData};
 
@@ -43,15 +46,18 @@ fn ext_syscall(
 	memory_mapping: &mut MemoryMapping,
 	result: &mut solana_rbpf::vm::ProgramResult,
 ) {
-	let ret_val = process_data.context.supervisor_call(
+	let gas_left = process_data.meter.get_remaining();
+	let post_gas_left = process_data.context.supervisor_call(
 		arg1,
 		arg2,
 		arg3,
 		arg4,
 		arg5,
+		gas_left,
 		MemoryRef { mapping: memory_mapping },
 	);
-	*result = solana_rbpf::vm::StableResult::Ok(ret_val);
+	process_data.meter.set_gas_left(post_gas_left);
+	*result = solana_rbpf::vm::StableResult::Ok(0);
 }
 
 // pub fn sol_memcpy_(dest: *mut u8, src: *const u8, n: u64);

@@ -543,21 +543,29 @@ where
 fn execute_ebpf(program: &[u8]) {
 	static mut COUNTER: u64 = 0;
 
-	extern "C" fn syscall_handler(state: u32, r1: u64, r2: u64, r3: u64, r4: u64, r5: u64) -> u64 {
+	extern "C" fn syscall_handler(
+		state: u32,
+		r1: u64,
+		r2: u64,
+		r3: u64,
+		r4: u64,
+		r5: u64,
+		gas_left: u64,
+	) -> u64 {
 		assert_eq!(state, 0x1337);
 		match r1 {
 			1 => {
 				let counter = unsafe { COUNTER };
 				let buf = counter.to_le_bytes();
 				sp_io::ebpf::caller_write(r2 as u64, buf.as_ptr() as u32, buf.len() as u32);
-				0
+				gas_left - 1
 			},
 			2 => {
 				let mut buf = [0u8; 8];
 				sp_io::ebpf::caller_read(r2 as u64, buf.as_mut_ptr() as u32, buf.len() as u32);
 				let counter = u64::from_le_bytes(buf);
 				unsafe { COUNTER = counter };
-				0
+				gas_left - 1
 			},
 			_ => panic!("unknown syscall: {}", r1),
 		}

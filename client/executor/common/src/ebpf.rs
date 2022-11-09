@@ -22,10 +22,13 @@ use solana_rbpf::{
 	elf::Executable,
 	memory_region::{AccessType, MemoryMapping, MemoryRegion},
 	verifier::RequisiteVerifier,
-	vm::{Config, EbpfVm, SyscallRegistry, TestInstructionMeter, VerifiedExecutable},
+	vm::{Config, EbpfVm, SyscallRegistry, VerifiedExecutable},
 };
 
+mod meter;
 mod syscall;
+
+use meter::MeterRef;
 
 const HEAP_SIZE: usize = 16 * 65536;
 
@@ -62,6 +65,7 @@ struct ProcessData<'a> {
 	context: &'a mut dyn SupervisorContext,
 	/// The next available address in the heap. Used by the bumper allocator.
 	bumper_next: u64,
+	meter: MeterRef,
 }
 
 /// This trait is used as a bridge between the eBPF program and the supervisor.
@@ -77,6 +81,7 @@ pub trait SupervisorContext {
 		r3: u64,
 		r4: u64,
 		r5: u64,
+		gas_left: u64,
 		memory_ref: MemoryRef<'_, '_>,
 	) -> u64;
 }
@@ -93,23 +98,28 @@ pub fn execute(
 	let mut syscall_registry = SyscallRegistry::default();
 	syscall::register(&mut syscall_registry);
 
-	let executable =
-		Executable::<TestInstructionMeter>::from_elf(program, config, syscall_registry).unwrap();
+	let executable = Executable::<MeterRef>::from_elf(program, config, syscall_registry).unwrap();
 	let region_input = MemoryRegion::new_writable(input, ebpf::MM_INPUT_START);
 
 	let verified_executable =
-		VerifiedExecutable::<RequisiteVerifier, TestInstructionMeter>::from_executable(executable)
-			.unwrap();
+		VerifiedExecutable::<RequisiteVerifier, MeterRef>::from_executable(executable).unwrap();
+
+	// Beware! This is not technically sound.
+	//
+	// The API of `solana_rbpf` allows us just to create EbpfVm with the given process data and
+	// but there is nothing that constraints EbpfVm to the lifetime of the process data.
+	let mut meter = MeterRef::new(gas_limit);
+	let mut process_data =
+		ProcessData { context, bumper_next: ebpf::MM_HEAP_START, meter: meter.clone() };
 
 	let mut heap = AlignedMemory::<{ HOST_ALIGN }>::zero_filled(HEAP_SIZE);
 	let mut vm = EbpfVm::new(
 		&verified_executable,
-		&mut ProcessData { context, bumper_next: 0x300000000 },
+		&mut process_data,
 		heap.as_slice_mut(),
 		vec![region_input],
 	)
 	.unwrap();
-	let _res = vm
-		.execute_program_interpreted(&mut TestInstructionMeter { remaining: gas_limit })
-		.unwrap();
+
+	let _res = vm.execute_program_interpreted(&mut meter).unwrap();
 }

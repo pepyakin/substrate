@@ -245,6 +245,7 @@ impl<'a, 'b> sc_executor_common::ebpf::SupervisorContext for EbpfSupervisorConte
 		r3: u64,
 		r4: u64,
 		r5: u64,
+		gas_left: u64,
 		memory_ref: sc_executor_common::ebpf::MemoryRef<'_, '_>,
 	) -> u64 {
 		dbg!("in");
@@ -262,6 +263,7 @@ impl<'a, 'b> sc_executor_common::ebpf::SupervisorContext for EbpfSupervisorConte
 					Val::I64(r3 as i64),
 					Val::I64(r4 as i64),
 					Val::I64(r5 as i64),
+					Val::I64(gas_left as i64),
 				],
 				&mut rets,
 			)
