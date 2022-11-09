@@ -333,7 +333,7 @@ fn expand_env(def: &mut EnvDef) -> TokenStream2 {
 			match result {
 				Ok(ret_value) => {
 					ctx
-						.write_sandbox_memory(r2, &ret_value.to_le_bytes())
+						.write_sandbox_memory(r3, &ret_value.to_le_bytes())
 						.map_err(|err| {
 							ctx.set_trap_reason(err.into());
 						})
