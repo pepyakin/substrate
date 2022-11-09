@@ -175,6 +175,13 @@ where
 		Ok(ChargedAmount(amount))
 	}
 
+	/// Set the gas meter to the new ref time coming from the execution engine.
+	/// Panics if trying to increase weifht
+	pub fn set_ref_time(&mut self, ref_time: u64) {
+		assert!(ref_time <= self.gas_left.ref_time(), "Execution engine never increases gas; qed");
+		self.gas_left.set_ref_time(ref_time);
+	}
+
 	/// Adjust a previously charged amount down to its actual amount.
 	///
 	/// This is when a maximum a priori amount was charged and then should be partially

@@ -460,6 +460,9 @@ where
 	/// bases the outcome on the value if this variable. Only if `trap_reason` is `None`
 	/// the result of the sandbox is evaluated.
 	pub fn to_execution_result(self, gas_left: u64, err_code: u32) -> ExecResult {
+		// sync gas from execution engine
+		self.ext.gas_meter().set_ref_time(gas_left);
+
 		// If a trap reason is set we base our decision solely on that.
 		if let Some(trap_reason) = self.trap_reason {
 			return match trap_reason {
@@ -475,17 +478,14 @@ where
 			}
 		}
 
-		// pub enum EbpfExecOutcome {
-		// 	Ok = 0,
-		// 	OutOfGas = 1,
-		// 	Trap = 2,
-		// 	InvalidImage = 3,
-		// }
-
 		match err_code {
+			// Ok
 			0 => Ok(ExecReturnValue { flags: ReturnFlags::empty(), data: Vec::new() }),
+			// OutOfGas
 			1 => Err(Error::<E::T>::OutOfGas.into()),
+			// Trap
 			2 => Err(Error::<E::T>::ContractTrapped.into()),
+			// InvalidImage
 			3 => Err(Error::<E::T>::CodeRejected.into()),
 			_ => {
 				panic!();

@@ -320,9 +320,13 @@ fn expand_env(def: &mut EnvDef) -> TokenStream2 {
 			E: Ext,
 			<E::T as frame_system::Config>::AccountId: UncheckedFrom<<E::T as frame_system::Config>::Hash> + AsRef<[u8]>
 		{
-			let ctx = unsafe {
-				&mut *((*state_object).runtime_ptr as *mut Runtime<E>)
+			let (ctx, __gas_left__) = unsafe {
+				(
+					&mut *((*state_object).runtime_ptr as *mut Runtime<E>),
+					&mut (*state_object).gas_left,
+				)
 			};
+			ctx.ext.gas_meter().set_ref_time(*__gas_left__);
 			let result: Result<(), ()> = match r1 {
 				#impls
 				_ => {
@@ -330,6 +334,7 @@ fn expand_env(def: &mut EnvDef) -> TokenStream2 {
 					Err(())
 				},
 			};
+			*__gas_left__ = ctx.ext.gas_meter().gas_left().ref_time();
 			result.map(|_| 0).unwrap_or(1)
 		}
 	}
