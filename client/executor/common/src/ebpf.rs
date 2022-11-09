@@ -20,9 +20,10 @@ use solana_rbpf::{
 	aligned_memory::AlignedMemory,
 	ebpf::{self, HOST_ALIGN},
 	elf::Executable,
+	error::EbpfError,
 	memory_region::{AccessType, MemoryMapping, MemoryRegion},
 	verifier::RequisiteVerifier,
-	vm::{Config, EbpfVm, SyscallRegistry, VerifiedExecutable},
+	vm::{Config, EbpfVm, StableResult, SyscallRegistry, VerifiedExecutable},
 };
 
 mod meter;
@@ -86,23 +87,44 @@ pub trait SupervisorContext {
 	) -> u64;
 }
 
-/// Executes the given program represented as an elf binary and input data.
+pub enum Error {
+	/// The eBPF program has run out of gas (OOG).
+	OutOfGas,
+	/// The eBPF program has trapped during the execution.
+	///
+	/// There are numerous ways to trap, e.g. access violation, division by zero. Calling a syscall
+	/// such as `abort`, `custom_panic`, etc will also cause a trap.
+	///
+	/// Be careful though since this error is a catch all it might actually be not a trap.
+	Trap,
+	/// The eBPF ELF image is invalid in some way.
+	InvalidImage,
+}
+
+/// Executes the given eBPF program.
+///
+/// The program will receive the given `input`.
+///
+/// This function also expects a gas limit. If the gas is exhausted before the program terminates
+/// then the execution is conclused with the OOG error.
 pub fn execute(
 	program: &[u8],
 	input: &mut [u8],
 	context: &mut dyn SupervisorContext,
 	gas_limit: u64,
-) {
+) -> Result<(), Error> {
 	let config = Config::default();
 
 	let mut syscall_registry = SyscallRegistry::default();
 	syscall::register(&mut syscall_registry);
 
-	let executable = Executable::<MeterRef>::from_elf(program, config, syscall_registry).unwrap();
+	let executable = Executable::<MeterRef>::from_elf(program, config, syscall_registry)
+		.map_err(|_| Error::InvalidImage)?;
 	let region_input = MemoryRegion::new_writable(input, ebpf::MM_INPUT_START);
 
 	let verified_executable =
-		VerifiedExecutable::<RequisiteVerifier, MeterRef>::from_executable(executable).unwrap();
+		VerifiedExecutable::<RequisiteVerifier, MeterRef>::from_executable(executable)
+			.map_err(|_| Error::InvalidImage)?;
 
 	// Beware! This is not technically sound.
 	//
@@ -119,7 +141,13 @@ pub fn execute(
 		heap.as_slice_mut(),
 		vec![region_input],
 	)
-	.unwrap();
+	.map_err(|_| Error::InvalidImage)?;
 
-	let _res = vm.execute_program_interpreted(&mut meter).unwrap();
+	match vm.execute_program_interpreted(&mut meter) {
+		StableResult::Ok(_ret_code) => Ok(()),
+		StableResult::Err(err) => match err {
+			EbpfError::ExceededMaxInstructions(_pc, _limit) => Err(Error::OutOfGas),
+			_ => Err(Error::Trap),
+		},
+	}
 }
