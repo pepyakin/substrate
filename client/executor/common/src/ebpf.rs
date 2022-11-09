@@ -170,7 +170,7 @@ fn ext_syscall(
 	memory_mapping: &mut MemoryMapping,
 	result: &mut solana_rbpf::vm::ProgramResult,
 ) {
-	process_data.context.supervisor_call(
+	let ret_val = process_data.context.supervisor_call(
 		arg1,
 		arg2,
 		arg3,
@@ -178,7 +178,7 @@ fn ext_syscall(
 		arg5,
 		MemoryRef { mapping: memory_mapping },
 	);
-	*result = solana_rbpf::vm::StableResult::Ok(0);
+	*result = solana_rbpf::vm::StableResult::Ok(ret_val);
 }
 
 // pub fn sol_memcpy_(dest: *mut u8, src: *const u8, n: u64);
