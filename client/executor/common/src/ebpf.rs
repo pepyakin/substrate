@@ -135,7 +135,7 @@ pub fn execute(
 
 	let executable = Executable::<MeterRef>::from_elf(program, config, syscall_registry)
 		.map_err(|_| ExecError::InvalidImage)?;
-	let region_input = MemoryRegion::new_writable(input, ebpf::MM_INPUT_START);
+	let region_input = MemoryRegion::new_readonly(input, ebpf::MM_INPUT_START);
 
 	#[cfg(target_arch = "x86_64")]
 	let jit = true;
