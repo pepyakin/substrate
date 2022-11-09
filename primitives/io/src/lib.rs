@@ -1659,10 +1659,13 @@ pub trait Sandbox {
 /// Sandbox but ebpf instead of wasm.
 #[runtime_interface(wasm_only)]
 pub trait Ebpf {
-	// TODO: Error handling
-
 	/// Executes the given EBPF program. The program is expected to be a valid ELF file. The program
 	/// takes input as a buffer.
+	///
+	/// # Errors
+	///
+	/// Traps if the syscall handler cannot be found. Otherwise, all the outcomes communicated via
+	/// a status code. See `EbpfExecOutcome`.
 	fn execute(
 		&mut self,
 		program: &[u8],
@@ -1670,22 +1673,41 @@ pub trait Ebpf {
 		syscall_handler: u32,
 		state: u32,
 		gas_limit: u64,
-	) -> Vec<u8> {
-		self.ebpf()
+	) -> u32 {
+		let outcome = self
+			.ebpf()
 			.execute(program, input, syscall_handler, state, gas_limit)
-			.expect("execution failed")
+			.expect("execution failed");
+		outcome as u32
 	}
 
 	/// If the calling code that is in turn was called by the EBPF program, this function will read
 	/// the memory of that program into the given buffer.
-	fn caller_read(&mut self, offset: u64, buf_ptr: u32, buf_len: u32) {
-		self.ebpf().caller_read(offset, buf_ptr, buf_len)
+	///
+	/// # Errors
+	///
+	/// If reading from the eBPF program fails, `false` is returned and the buffer is not modified.
+	/// Otherwise, `true` is returned.
+	///
+	/// Traps, if the supervisor buffer cannot be written to.
+	fn caller_read(&mut self, offset: u64, buf_ptr: u32, buf_len: u32) -> bool {
+		self.ebpf()
+			.caller_read(offset, buf_ptr, buf_len)
+			.expect("reading from ebpf caller failed")
 	}
 
 	/// If the calling code that is in turn was called by the EBPF program, this function will write
 	/// the memory of that program from the given buffer.
-	fn caller_write(&mut self, offset: u64, buf_ptr: u32, buf_len: u32) {
-		self.ebpf().caller_write(offset, buf_ptr, buf_len)
+	///
+	/// # Errors
+	///
+	/// If writing into the eBPF program fails, `false` is returned. Otherwise, `true` is returned.
+	///
+	/// Traps, if the supervisor buffer cannot be read from.
+	fn caller_write(&mut self, offset: u64, buf_ptr: u32, buf_len: u32) -> bool {
+		self.ebpf()
+			.caller_write(offset, buf_ptr, buf_len)
+			.expect("writing to ebpf caller failed")
 	}
 }
 

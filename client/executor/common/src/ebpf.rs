@@ -31,6 +31,21 @@ mod syscall;
 
 use meter::MeterRef;
 
+/// An error that can happen during [`execute`].
+pub enum ExecError {
+	/// The eBPF program has run out of gas (OOG).
+	OutOfGas,
+	/// The eBPF program has trapped during the execution.
+	///
+	/// There are numerous ways to trap, e.g. access violation, division by zero. Calling a syscall
+	/// such as `abort`, `custom_panic`, etc will also cause a trap.
+	///
+	/// Be careful though since this error is a catch all it might actually be not a trap.
+	Trap,
+	/// The eBPF ELF image is invalid in some way.
+	InvalidImage,
+}
+
 const HEAP_SIZE: usize = 16 * 65536;
 
 pub struct MemoryRef<'a, 'b> {
@@ -46,18 +61,27 @@ impl<'a, 'b> MemoryRef<'a, 'b> {
 		MemoryRef { mapping: std::mem::transmute(ptr) }
 	}
 
-	pub fn read(&self, offset: u64, buf: &mut [u8]) {
-		let host_addr = self.mapping.map(AccessType::Load, offset, buf.len() as u64).unwrap();
+	/// Reads the memory at the given address into the given buffer.
+	///
+	/// Returns `false` is the memory is not accessible.
+	pub fn read(&self, offset: u64, buf: &mut [u8]) -> Result<(), EbpfError> {
+		let host_addr = Result::from(self.mapping.map(AccessType::Load, offset, buf.len() as u64))?;
 		buf.copy_from_slice(unsafe {
 			std::slice::from_raw_parts(host_addr as usize as *mut u8, buf.len())
 		});
+		Ok(())
 	}
 
-	pub fn write(&mut self, offset: u64, buf: &[u8]) {
-		let host_addr = self.mapping.map(AccessType::Store, offset, buf.len() as u64).unwrap();
+	/// Writes the given buffer to the memory at the given offset.
+	///
+	/// Returns `false` if the write would go out of bounds.
+	pub fn write(&mut self, offset: u64, buf: &[u8]) -> Result<(), EbpfError> {
+		let host_addr =
+			Result::from(self.mapping.map(AccessType::Store, offset, buf.len() as u64))?;
 		unsafe {
 			std::ptr::copy_nonoverlapping(buf.as_ptr(), host_addr as usize as *mut u8, buf.len())
-		};
+		}
+		Ok(())
 	}
 }
 
@@ -87,20 +111,6 @@ pub trait SupervisorContext {
 	) -> u64;
 }
 
-pub enum Error {
-	/// The eBPF program has run out of gas (OOG).
-	OutOfGas,
-	/// The eBPF program has trapped during the execution.
-	///
-	/// There are numerous ways to trap, e.g. access violation, division by zero. Calling a syscall
-	/// such as `abort`, `custom_panic`, etc will also cause a trap.
-	///
-	/// Be careful though since this error is a catch all it might actually be not a trap.
-	Trap,
-	/// The eBPF ELF image is invalid in some way.
-	InvalidImage,
-}
-
 /// Executes the given eBPF program.
 ///
 /// The program will receive the given `input`.
@@ -112,19 +122,19 @@ pub fn execute(
 	input: &mut [u8],
 	context: &mut dyn SupervisorContext,
 	gas_limit: u64,
-) -> Result<(), Error> {
+) -> Result<(), ExecError> {
 	let config = Config::default();
 
 	let mut syscall_registry = SyscallRegistry::default();
 	syscall::register(&mut syscall_registry);
 
 	let executable = Executable::<MeterRef>::from_elf(program, config, syscall_registry)
-		.map_err(|_| Error::InvalidImage)?;
+		.map_err(|_| ExecError::InvalidImage)?;
 	let region_input = MemoryRegion::new_writable(input, ebpf::MM_INPUT_START);
 
 	let verified_executable =
 		VerifiedExecutable::<RequisiteVerifier, MeterRef>::from_executable(executable)
-			.map_err(|_| Error::InvalidImage)?;
+			.map_err(|_| ExecError::InvalidImage)?;
 
 	// Beware! This is not technically sound.
 	//
@@ -141,13 +151,13 @@ pub fn execute(
 		heap.as_slice_mut(),
 		vec![region_input],
 	)
-	.map_err(|_| Error::InvalidImage)?;
+	.map_err(|_| ExecError::InvalidImage)?;
 
 	match vm.execute_program_interpreted(&mut meter) {
 		StableResult::Ok(_ret_code) => Ok(()),
 		StableResult::Err(err) => match err {
-			EbpfError::ExceededMaxInstructions(_pc, _limit) => Err(Error::OutOfGas),
-			_ => Err(Error::Trap),
+			EbpfError::ExceededMaxInstructions(_pc, _limit) => Err(ExecError::OutOfGas),
+			_ => Err(ExecError::Trap),
 		},
 	}
 }

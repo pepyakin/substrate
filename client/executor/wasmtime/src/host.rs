@@ -25,12 +25,13 @@ use wasmtime::{Caller, Func, Val};
 use codec::{Decode, Encode};
 use sc_allocator::{AllocationStats, FreeingBumpHeapAllocator};
 use sc_executor_common::{
+	ebpf::ExecError,
 	error::Result,
 	sandbox::{self, SupervisorFuncIndex},
 	util::MemoryTransfer,
 };
 use sp_sandbox::env as sandbox_env;
-use sp_wasm_interface::{FunctionContext, MemoryId, Pointer, Sandbox, WordSize};
+use sp_wasm_interface::{EbpfExecOutcome, FunctionContext, MemoryId, Pointer, Sandbox, WordSize};
 
 use crate::{runtime::StoreData, util};
 
@@ -170,7 +171,7 @@ impl<'a> sp_wasm_interface::Ebpf for HostContext<'a> {
 		syscall_handler: u32,
 		state: u32,
 		gas_limit: u64,
-	) -> sp_wasm_interface::Result<Vec<u8>> {
+	) -> sp_wasm_interface::Result<sp_wasm_interface::EbpfExecOutcome> {
 		// Extract a syscall handler from the instance's table by the specified index.
 		let syscall_handler = {
 			let table = self
@@ -188,34 +189,61 @@ impl<'a> sp_wasm_interface::Ebpf for HostContext<'a> {
 		};
 
 		let mut input = input.to_vec();
-		sc_executor_common::ebpf::execute(
+		let outcome = match sc_executor_common::ebpf::execute(
 			program,
 			&mut input,
 			&mut EbpfSupervisorContext { syscall_handler, host_context: self, state },
 			gas_limit,
-		);
-
-		// TODO:
-		Ok(vec![])
+		) {
+			Ok(()) => EbpfExecOutcome::Ok,
+			Err(ExecError::Trap) => EbpfExecOutcome::Trap,
+			Err(ExecError::OutOfGas) => EbpfExecOutcome::OutOfGas,
+			Err(ExecError::InvalidImage) => EbpfExecOutcome::InvalidImage,
+		};
+		Ok(outcome)
 	}
 
-	/// If the calling code that is in turn was called by the EBPF program, this function will read
-	/// the memory of that program into the given buffer.
-	fn caller_read(&mut self, offset: u64, buf_ptr: u32, buf_len: u32) {
+	fn caller_read(
+		&mut self,
+		offset: u64,
+		buf_ptr: u32,
+		buf_len: u32,
+	) -> sp_wasm_interface::Result<bool> {
 		dbg!(offset, buf_ptr, buf_len);
+		let ebpf_memory_ref = self
+			.caller
+			.data_mut()
+			.host_state_mut()
+			.unwrap()
+			.ebpf_memory_ref
+			.ok_or("no eBPF caller")?;
 		let mut buf = vec![0u8; buf_len as usize];
 		unsafe {
-			let ebpf_memory_ref =
-				self.caller.data_mut().host_state_mut().unwrap().ebpf_memory_ref.unwrap();
 			let memory_ref = sc_executor_common::ebpf::MemoryRef::recover(ebpf_memory_ref);
-			memory_ref.read(offset, &mut buf);
+			let success = memory_ref.read(offset, &mut buf).is_ok();
+			if success {
+				util::write_memory_from(&mut self.caller, buf_ptr.into(), &buf).map_err(|_| {
+					"Failed to write memory from the sandboxed instance to the supervisor"
+				})?;
+			}
+			Ok(success)
 		}
-		util::write_memory_from(&mut self.caller, buf_ptr.into(), &buf).expect("write memory");
 	}
 
-	/// If the calling code that is in turn was called by the EBPF program, this function will write
-	/// the memory of that program from the given buffer.
-	fn caller_write(&mut self, offset: u64, buf_ptr: u32, buf_len: u32) {
+	fn caller_write(
+		&mut self,
+		offset: u64,
+		buf_ptr: u32,
+		buf_len: u32,
+	) -> sp_wasm_interface::Result<bool> {
+		let ebpf_memory_ref = self
+			.caller
+			.data_mut()
+			.host_state_mut()
+			.unwrap()
+			.ebpf_memory_ref
+			.ok_or("no eBPF caller")?;
+
 		dbg!(offset, buf_ptr, buf_len);
 		// read the supervisor memory into a buffer.
 		let buffer = match util::read_memory(&self.caller, buf_ptr.into(), buf_len as usize) {
@@ -223,10 +251,9 @@ impl<'a> sp_wasm_interface::Ebpf for HostContext<'a> {
 			Ok(buffer) => buffer,
 		};
 		unsafe {
-			let ebpf_memory_ref =
-				self.caller.data_mut().host_state_mut().unwrap().ebpf_memory_ref.unwrap();
 			let mut memory_ref = sc_executor_common::ebpf::MemoryRef::recover(ebpf_memory_ref);
-			memory_ref.write(offset, &buffer);
+			let success = memory_ref.write(offset, &buffer).is_ok();
+			Ok(success)
 		}
 	}
 }

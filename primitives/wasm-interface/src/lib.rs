@@ -385,9 +385,24 @@ pub trait Sandbox {
 	fn get_global_val(&self, instance_idx: u32, name: &str) -> Result<Option<Value>>;
 }
 
+#[repr(u32)]
+pub enum EbpfExecOutcome {
+	Ok,
+	OutOfGas,
+	Trap,
+	InvalidImage,
+}
+
 pub trait Ebpf {
 	/// Executes the given EBPF program. The program is expected to be a valid ELF file. The program
 	/// takes input as a buffer.
+	///
+	/// # Errors
+	///
+	/// In case there is an error related to the execution, it will be reported as
+	/// `Ok(EbpfExecOutcome)`. However, in case there is an unrecoverable error (e.g. it's not
+	/// possible to find the supervisor's syscall handler in the table) it will be returned as an
+	/// `Err`.
 	fn execute(
 		&mut self,
 		program: &[u8],
@@ -395,15 +410,29 @@ pub trait Ebpf {
 		syscall_handler: u32,
 		state: u32,
 		gas_limit: u64,
-	) -> Result<Vec<u8>>;
+	) -> Result<EbpfExecOutcome>;
 
 	/// If the calling code that is in turn was called by the EBPF program, this function will read
 	/// the memory of that program into the given buffer.
-	fn caller_read(&mut self, offset: u64, buf_ptr: u32, buf_len: u32);
+	///
+	/// # Errors
+	///
+	/// If reading did not succeed, `false` is returned. Otherwise, `true` is returned.
+	///
+	/// `Err` is returned, if writing result into the buffer failed or if the runtime is not invoked
+	/// by an eBPF contract.
+	fn caller_read(&mut self, offset: u64, buf_ptr: u32, buf_len: u32) -> Result<bool>;
 
 	/// If the calling code that is in turn was called by the EBPF program, this function will write
 	/// the memory of that program from the given buffer.
-	fn caller_write(&mut self, offset: u64, buf_ptr: u32, buf_len: u32);
+	///
+	/// # Errors
+	///
+	/// If writing did not succeed, `false` is returned. Otherwise, `true` is returned.
+	///
+	/// `Err` is returned, if reading the buffer failed or if the runtime is not invoked by an eBPF
+	/// contract.
+	fn caller_write(&mut self, offset: u64, buf_ptr: u32, buf_len: u32) -> Result<bool>;
 }
 
 if_wasmtime_is_enabled! {
