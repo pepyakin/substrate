@@ -319,31 +319,18 @@ fn expand_env(def: &mut EnvDef) -> TokenStream2 {
 		where
 			E: Ext,
 			<E::T as frame_system::Config>::AccountId: UncheckedFrom<<E::T as frame_system::Config>::Hash> + AsRef<[u8]>
-		{;
+		{
 			let ctx = unsafe {
 				&mut *((*state_object).runtime_ptr as *mut Runtime<E>)
 			};
-			let result: Result<u64, ()> = match r1 {
+			let result: Result<(), ()> = match r1 {
 				#impls
 				_ => {
 					ctx.set_trap_reason(crate::Error::<E::T>::UnknownSyscall.into());
 					Err(())
 				},
 			};
-			match result {
-				Ok(ret_value) => {
-					ctx
-						.write_sandbox_memory(r3, &ret_value.to_le_bytes())
-						.map_err(|err| {
-							ctx.set_trap_reason(err.into());
-						})
-						.map(|_| 0)
-						.unwrap_or(1)
-				},
-				Err(_) => {
-					1
-				},
-			}
+			result.map(|_| 0).unwrap_or(1)
 		}
 	}
 }
@@ -372,8 +359,14 @@ fn expand_functions(def: &mut EnvDef) -> TokenStream2 {
 		};
 
 		let map_output = match &f.returns {
-			HostFnReturn::Unit => quote! { |_| 0u64 },
-			HostFnReturn::U32 | HostFnReturn::ReturnCode => quote! { |val| (val as u32).into() },
+			HostFnReturn::Unit => quote! { |_| Ok(()) },
+			HostFnReturn::U32 | HostFnReturn::ReturnCode => quote! {
+				|val| {
+					let val: u32 = (val as u32).into();
+					ctx.write_sandbox_memory(r3, &val.to_le_bytes())?;
+					Ok(())
+				}
+			},
 		};
 
 		quote! {
@@ -386,7 +379,7 @@ fn expand_functions(def: &mut EnvDef) -> TokenStream2 {
 					#body
 				};
 				func()
-					.map(#map_output)
+					.and_then(#map_output)
 					.map_err(|trap_reason| ctx.set_trap_reason(trap_reason))
 			}
 		}
