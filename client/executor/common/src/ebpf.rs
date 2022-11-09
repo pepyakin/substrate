@@ -32,6 +32,7 @@ mod syscall;
 use meter::MeterRef;
 
 /// An error that can happen during [`execute`].
+#[derive(Debug)]
 pub enum ExecError {
 	/// The eBPF program has run out of gas (OOG).
 	OutOfGas,
@@ -136,9 +137,21 @@ pub fn execute(
 		.map_err(|_| ExecError::InvalidImage)?;
 	let region_input = MemoryRegion::new_writable(input, ebpf::MM_INPUT_START);
 
-	let verified_executable =
+	#[cfg(target_arch = "x86_64")]
+	let jit = true;
+	#[cfg(not(target_arch = "x86_64"))]
+	let jit = false;
+
+	let mut verified_executable =
 		VerifiedExecutable::<RequisiteVerifier, MeterRef>::from_executable(executable)
 			.map_err(|_| ExecError::InvalidImage)?;
+
+	if jit {
+		verified_executable
+			.jit_compile()
+			.map_err(|err| dbg!(err))
+			.map_err(|_| ExecError::InvalidImage)?;
+	}
 
 	// Beware! This is not technically sound.
 	//
@@ -157,7 +170,11 @@ pub fn execute(
 	)
 	.map_err(|_| ExecError::InvalidImage)?;
 
-	let result = vm.execute_program_interpreted(&mut meter);
+	let result = if jit {
+		vm.execute_program_jit(&mut meter)
+	} else {
+		vm.execute_program_interpreted(&mut meter)
+	};
 	*gas_left = meter.get_remaining();
 	match result {
 		StableResult::Ok(_ret_code) => Ok(()),
