@@ -23,7 +23,7 @@ use solana_rbpf::{
 	error::EbpfError,
 	memory_region::{AccessType, MemoryMapping, MemoryRegion},
 	verifier::RequisiteVerifier,
-	vm::{Config, EbpfVm, StableResult, SyscallRegistry, VerifiedExecutable},
+	vm::{Config, EbpfVm, InstructionMeter, StableResult, SyscallRegistry, VerifiedExecutable},
 };
 
 mod meter;
@@ -98,8 +98,9 @@ struct ProcessData<'a> {
 /// Specifically, it will be invoked every time when the eBPF program invokes the `ext_syscall`
 /// syscall (via `call ext_syscall` in eBPF code).
 pub trait SupervisorContext {
-	/// Returns an `Ok(error code)`. If it's non-zero then the eBPF program will trap. `gas_left` can be
-	/// changed to any value. If it's zero then the eBPF program will run out of gas immediatelly.
+	/// Returns an `Ok(error code)`. If it's non-zero then the eBPF program will trap. `gas_left`
+	/// can be changed to any value. If it's zero then the eBPF program will run out of gas
+	/// immediatelly.
 	///
 	/// Returns `Err` if the supervisor trapped.
 	fn supervisor_call(
@@ -124,7 +125,7 @@ pub fn execute(
 	program: &[u8],
 	input: &mut [u8],
 	context: &mut dyn SupervisorContext,
-	gas_limit: u64,
+	gas_left: &mut u64,
 ) -> Result<(), ExecError> {
 	let config = Config::default();
 
@@ -143,7 +144,7 @@ pub fn execute(
 	//
 	// The API of `solana_rbpf` allows us just to create EbpfVm with the given process data and
 	// but there is nothing that constraints EbpfVm to the lifetime of the process data.
-	let mut meter = MeterRef::new(gas_limit);
+	let mut meter = MeterRef::new(*gas_left);
 	let mut process_data =
 		ProcessData { context, bumper_next: ebpf::MM_HEAP_START, meter: meter.clone() };
 
@@ -156,7 +157,9 @@ pub fn execute(
 	)
 	.map_err(|_| ExecError::InvalidImage)?;
 
-	match vm.execute_program_interpreted(&mut meter) {
+	let result = vm.execute_program_interpreted(&mut meter);
+	*gas_left = meter.get_remaining();
+	match result {
 		StableResult::Ok(_ret_code) => Ok(()),
 		StableResult::Err(err) => match err {
 			EbpfError::ExceededMaxInstructions(_pc, _limit) => Err(ExecError::OutOfGas),

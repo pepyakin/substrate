@@ -387,29 +387,36 @@ pub trait Sandbox {
 
 #[repr(u32)]
 pub enum EbpfExecOutcome {
-	Ok,
-	OutOfGas,
-	Trap,
-	InvalidImage,
+	Ok = 0,
+	OutOfGas = 1,
+	Trap = 2,
+	InvalidImage = 3,
 }
 
 pub trait Ebpf {
-	/// Executes the given EBPF program. The program is expected to be a valid ELF file. The program
+	/// Executes the given eBPF program. The program is expected to be a valid ELF file. The program
 	/// takes input as a buffer.
+	///
+	/// The eBPF program can communicate with the supervisor through invoking the `ext_syscall`
+	/// syscall.
+	///
+	/// `state_ptr` is a pointer to the state object. The requirement is that the first field of
+	/// the state object is an `u64` with `gas_left`.
 	///
 	/// # Errors
 	///
 	/// In case there is an error related to the execution, it will be reported as
-	/// `Ok(EbpfExecOutcome)`. However, in case there is an unrecoverable error (e.g. it's not
-	/// possible to find the supervisor's syscall handler in the table) it will be returned as an
-	/// `Err`.
+	/// `Ok(EbpfExecOutcome)`.
+	///
+	/// However, in case there is an unrecoverable error (e.g. it's not possible to find the
+	/// supervisor's syscall handler in the table, or the state pointer is not writable) it will be
+	/// returned as an `Err`.
 	fn execute(
 		&mut self,
 		program: &[u8],
 		input: &[u8],
 		syscall_handler: u32,
-		state: u32,
-		gas_limit: u64,
+		state_ptr: u32,
 	) -> Result<EbpfExecOutcome>;
 
 	/// If the calling code that is in turn was called by the EBPF program, this function will read

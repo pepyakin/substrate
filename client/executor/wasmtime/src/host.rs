@@ -181,8 +181,7 @@ impl<'a> sp_wasm_interface::Ebpf for HostContext<'a> {
 		program: &[u8],
 		input: &[u8],
 		syscall_handler: u32,
-		state: u32,
-		gas_limit: u64,
+		state_ptr: u32,
 	) -> sp_wasm_interface::Result<sp_wasm_interface::EbpfExecOutcome> {
 		// Extract a syscall handler from the instance's table by the specified index.
 		let syscall_handler = {
@@ -200,18 +199,24 @@ impl<'a> sp_wasm_interface::Ebpf for HostContext<'a> {
 				.ok_or("dispatch_thunk_idx should point to actual func")?
 		};
 
+		let mut gas_left = self.read_u64(state_ptr).map_err(|_| "state ptr is not writable")?;
+
 		let mut input = input.to_vec();
 		let outcome = match sc_executor_common::ebpf::execute(
 			program,
 			&mut input,
-			&mut EbpfSupervisorContext { syscall_handler, host_context: self, state },
-			gas_limit,
+			&mut EbpfSupervisorContext { syscall_handler, host_context: self, state_ptr },
+			&mut gas_left,
 		) {
 			Ok(()) => EbpfExecOutcome::Ok,
 			Err(ExecError::Trap) => EbpfExecOutcome::Trap,
 			Err(ExecError::OutOfGas) => EbpfExecOutcome::OutOfGas,
 			Err(ExecError::InvalidImage) => EbpfExecOutcome::InvalidImage,
 		};
+
+		// dump back the gas left
+		self.write_u64(state_ptr, gas_left).map_err(|_| "state ptr is not writable")?;
+
 		Ok(outcome)
 	}
 
@@ -273,7 +278,7 @@ impl<'a> sp_wasm_interface::Ebpf for HostContext<'a> {
 struct EbpfSupervisorContext<'a, 'b> {
 	syscall_handler: Func,
 	host_context: &'a mut HostContext<'b>,
-	state: u32,
+	state_ptr: u32,
 }
 
 impl<'a, 'b> sc_executor_common::ebpf::SupervisorContext for EbpfSupervisorContext<'a, 'b> {
@@ -292,31 +297,30 @@ impl<'a, 'b> sc_executor_common::ebpf::SupervisorContext for EbpfSupervisorConte
 			Some(memory_ref.erase());
 
 		// dump gas_left into the supervisor memory.
-		self.host_context.write_u64(self.state, *gas_left).map_err(|_| ())?;
+		self.host_context.write_u64(self.state_ptr, *gas_left).map_err(|_| ())?;
 
 		let mut rets = [Val::I64(0i64); 1];
-		let result = self.syscall_handler
-			.call(
-				&mut self.host_context.caller,
-				&[
-					Val::I32(self.state as i32),
-					Val::I64(r1 as i64),
-					Val::I64(r2 as i64),
-					Val::I64(r3 as i64),
-					Val::I64(r4 as i64),
-					Val::I64(r5 as i64),
-				],
-				&mut rets,
-			);
+		let result = self.syscall_handler.call(
+			&mut self.host_context.caller,
+			&[
+				Val::I32(self.state_ptr as i32),
+				Val::I64(r1 as i64),
+				Val::I64(r2 as i64),
+				Val::I64(r3 as i64),
+				Val::I64(r4 as i64),
+				Val::I64(r5 as i64),
+			],
+			&mut rets,
+		);
 
 		// reload gas_left from the supervisor memory.
-		*gas_left = self.host_context.read_u64(self.state).map_err(|_| ())?;
+		*gas_left = self.host_context.read_u64(self.state_ptr).map_err(|_| ())?;
 
 		dbg!("out");
 		self.host_context.caller.data_mut().host_state_mut().unwrap().ebpf_memory_ref = None;
 
 		if let Err(_) = result {
-			return Err(());
+			return Err(())
 		}
 
 		Ok(rets[0].unwrap_i64() as u64)

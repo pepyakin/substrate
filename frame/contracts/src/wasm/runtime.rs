@@ -425,6 +425,12 @@ fn already_charged(_: u32) -> Option<RuntimeCosts> {
 	None
 }
 
+#[repr(C)]
+pub struct StateObject {
+	pub gas_left: u64,
+	pub runtime_ptr: *mut (),
+}
+
 /// Can only be used for one call.
 pub struct Runtime<'a, E: Ext + 'a> {
 	ext: &'a mut E,
@@ -453,7 +459,7 @@ where
 	/// It evaluates information stored in the `trap_reason` variable of the runtime and
 	/// bases the outcome on the value if this variable. Only if `trap_reason` is `None`
 	/// the result of the sandbox is evaluated.
-	pub fn to_execution_result(self) -> ExecResult {
+	pub fn to_execution_result(self, gas_left: u64, err_code: u32) -> ExecResult {
 		// If a trap reason is set we base our decision solely on that.
 		if let Some(trap_reason) = self.trap_reason {
 			return match trap_reason {
@@ -468,7 +474,23 @@ where
 				TrapReason::SupervisorError(error) => return Err(error.into()),
 			}
 		}
-		Ok(ExecReturnValue { flags: ReturnFlags::empty(), data: Vec::new() })
+
+		// pub enum EbpfExecOutcome {
+		// 	Ok = 0,
+		// 	OutOfGas = 1,
+		// 	Trap = 2,
+		// 	InvalidImage = 3,
+		// }
+
+		match err_code {
+			0 => Ok(ExecReturnValue { flags: ReturnFlags::empty(), data: Vec::new() }),
+			1 => Err(Error::<E::T>::OutOfGas.into()),
+			2 => Err(Error::<E::T>::ContractTrapped.into()),
+			3 => Err(Error::<E::T>::CodeRejected.into()),
+			_ => {
+				panic!();
+			},
+		}
 	}
 
 	/// Get a mutable reference to the inner `Ext`.
@@ -527,7 +549,9 @@ where
 		buf: &mut [u8],
 	) -> Result<(), DispatchError> {
 		#[cfg(not(feature = "std"))]
-		ebpf::caller_read(ptr, buf.as_mut_ptr() as usize as u32, buf.len() as u32);
+		if !ebpf::caller_read(ptr, buf.as_mut_ptr() as usize as u32, buf.len() as u32) {
+			return Err(Error::<E::T>::OutOfBounds.into())
+		}
 		Ok(())
 	}
 
@@ -623,7 +647,9 @@ where
 	/// - designated area is not within the bounds of the sandbox memory.
 	fn write_sandbox_memory(&mut self, ptr: u64, buf: &[u8]) -> Result<(), DispatchError> {
 		#[cfg(not(feature = "std"))]
-		ebpf::caller_write(ptr, buf.as_ptr() as usize as u32, buf.len() as u32);
+		if !ebpf::caller_write(ptr, buf.as_ptr() as usize as u32, buf.len() as u32) {
+			return Err(Error::<E::T>::OutOfBounds.into())
+		}
 		Ok(())
 	}
 

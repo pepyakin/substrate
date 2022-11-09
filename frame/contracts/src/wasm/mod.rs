@@ -40,6 +40,8 @@ use sp_std::prelude::*;
 #[cfg(test)]
 pub use tests::MockExt;
 
+use self::runtime::StateObject;
+
 /// A prepared wasm module ready for execution.
 ///
 /// # Note
@@ -252,16 +254,31 @@ where
 
 		// Instantiate the instance from the instrumented module code and invoke the contract
 		// entrypoint.
+		let gas_left = ext.gas_meter().gas_left().ref_time();
 		let mut runtime = Runtime::new(ext, input_data);
+		let mut state_object =
+			StateObject { gas_left, runtime_ptr: &mut runtime as *mut Runtime<E> as *mut () };
+
 		let dispatch_thunk = runtime::dispatch_thunk::<E>;
 		#[cfg(not(feature = "std"))]
-		ebpf::execute(
-			&code,
-			function.identifier().as_bytes(),
-			dispatch_thunk as u32,
-			(&mut runtime as *mut Runtime<E>) as u32,
-		);
-		runtime.to_execution_result()
+		{
+			let err_code = ebpf::execute(
+				&code,
+				function.identifier().as_bytes(),
+				dispatch_thunk as u32,
+				&mut state_object as *mut _ as u32,
+			);
+
+			// eagerly deconstruct state object. At this point `runtime` should be unaliased.
+			let StateObject { gas_left, .. } = state_object;
+
+			runtime.to_execution_result(gas_left, err_code)
+		}
+
+		#[cfg(feature = "std")]
+		{
+			unimplemented!()
+		}
 	}
 
 	fn code_hash(&self) -> &CodeHash<T> {

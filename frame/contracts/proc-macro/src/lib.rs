@@ -315,22 +315,35 @@ fn expand_env(def: &mut EnvDef) -> TokenStream2 {
 	let impls = expand_functions(def);
 
 	quote! {
-		pub extern "C" fn dispatch_thunk<E>(ctx: u32, r1: u64, r2: u64, r3: u64, _r4: u64, _r5: u64) -> u64
+		pub extern "C" fn dispatch_thunk<E>(state_object: *mut StateObject, r1: u64, r2: u64, r3: u64, _r4: u64, _r5: u64) -> u64
 		where
 			E: Ext,
 			<E::T as frame_system::Config>::AccountId: UncheckedFrom<<E::T as frame_system::Config>::Hash> + AsRef<[u8]>
-		{
+		{;
 			let ctx = unsafe {
-				&mut *(ctx as *mut Runtime<E>)
+				&mut *((*state_object).runtime_ptr as *mut Runtime<E>)
 			};
-			let result = match r1 {
+			let result: Result<u64, ()> = match r1 {
 				#impls
 				_ => {
 					ctx.set_trap_reason(crate::Error::<E::T>::UnknownSyscall.into());
-					Ok(0)
+					Err(())
 				},
 			};
-			result.unwrap_or(0)
+			match result {
+				Ok(ret_value) => {
+					ctx
+						.write_sandbox_memory(r2, &ret_value.to_le_bytes())
+						.map_err(|err| {
+							ctx.set_trap_reason(err.into());
+						})
+						.map(|_| 0)
+						.unwrap_or(1)
+				},
+				Err(_) => {
+					1
+				},
+			}
 		}
 	}
 }

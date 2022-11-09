@@ -539,17 +539,17 @@ where
 	result.map_err(|_| sp_sandbox::HostError)
 }
 
-#[repc(C)]
-struct State {
-	gas: u64,
-	data: *mut (),
-}
-
 #[cfg(not(feature = "std"))]
 fn execute_ebpf(program: &[u8]) {
+	#[repr(C)]
+	struct State {
+		gas: u64,
+		data: *mut (),
+	}
+
 	static mut COUNTER: u64 = 0;
 
-	extern "C" fn syscall_handler(
+	unsafe extern "C" fn syscall_handler(
 		state: *mut State,
 		arg1: u64,
 		arg2: u64,
@@ -576,11 +576,13 @@ fn execute_ebpf(program: &[u8]) {
 			_ => panic!("unknown syscall: {}", arg1),
 		}
 	}
-	let mut state = State {
-		gas: 100_000_000,
-		data: 0x1337 as *mut (),
-	};
-	sp_io::ebpf::execute(program, &[], syscall_handler as usize as u32, &mut state as *mut _ as u32);
+	let mut state = State { gas: 100_000_000, data: 0x1337 as *mut () };
+	sp_io::ebpf::execute(
+		program,
+		&[],
+		syscall_handler as usize as u32,
+		&mut state as *mut _ as u32,
+	);
 
 	assert_eq!(unsafe { COUNTER }, 1);
 }

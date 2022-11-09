@@ -1659,24 +1659,32 @@ pub trait Sandbox {
 /// Sandbox but ebpf instead of wasm.
 #[runtime_interface(wasm_only)]
 pub trait Ebpf {
-	/// Executes the given EBPF program. The program is expected to be a valid ELF file. The program
+	/// Executes the given eBPF program. The program is expected to be a valid ELF file. The program
 	/// takes input as a buffer.
+	///
+	/// The eBPF program can communicate with the supervisor through invoking the `ext_syscall`
+	/// syscall.
+	///
+	/// `state_ptr` is a pointer to the state object. The requirement is that the first field of
+	/// the state object is an `u64` with `gas_left`.
 	///
 	/// # Errors
 	///
-	/// Traps if the syscall handler cannot be found. Otherwise, all the outcomes communicated via
-	/// a status code. See `EbpfExecOutcome`.
+	/// In case there is an error related to the execution, it will be reported as
+	/// `Ok(EbpfExecOutcome)`.
+	///
+	/// Traps if the syscall handler cannot be found or state object is not accessible. Otherwise,
+	/// all the outcomes communicated via a status code. See `EbpfExecOutcome`.
 	fn execute(
 		&mut self,
 		program: &[u8],
 		input: &[u8],
 		syscall_handler: u32,
-		state: u32,
-		gas_limit: u64,
+		state_ptr: u32,
 	) -> u32 {
 		let outcome = self
 			.ebpf()
-			.execute(program, input, syscall_handler, state, gas_limit)
+			.execute(program, input, syscall_handler, state_ptr)
 			.expect("execution failed");
 		outcome as u32
 	}
