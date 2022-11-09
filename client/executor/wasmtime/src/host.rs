@@ -115,6 +115,18 @@ impl<'a> HostContext<'a> {
 			.as_mut()
 			.expect("sandbox store is only empty when temporarily borrowed")
 	}
+
+	fn write_u64(&mut self, offset: u32, value: u64) -> Result<()> {
+		let buf = value.to_le_bytes();
+		util::write_memory_from(&mut self.caller, offset.into(), &buf)?;
+		Ok(())
+	}
+
+	fn read_u64(&self, offset: u32) -> Result<u64> {
+		let mut buf = [0u8; 8];
+		util::read_memory_into(&self.caller, offset.into(), &mut buf)?;
+		Ok(u64::from_le_bytes(buf))
+	}
 }
 
 impl<'a> sp_wasm_interface::FunctionContext for HostContext<'a> {
@@ -272,15 +284,18 @@ impl<'a, 'b> sc_executor_common::ebpf::SupervisorContext for EbpfSupervisorConte
 		r3: u64,
 		r4: u64,
 		r5: u64,
-		gas_left: u64,
+		gas_left: &mut u64,
 		memory_ref: sc_executor_common::ebpf::MemoryRef<'_, '_>,
-	) -> u64 {
+	) -> std::result::Result<u64, ()> {
 		dbg!("in");
 		self.host_context.caller.data_mut().host_state_mut().unwrap().ebpf_memory_ref =
 			Some(memory_ref.erase());
 
+		// dump gas_left into the supervisor memory.
+		self.host_context.write_u64(self.state, *gas_left).map_err(|_| ())?;
+
 		let mut rets = [Val::I64(0i64); 1];
-		self.syscall_handler
+		let result = self.syscall_handler
 			.call(
 				&mut self.host_context.caller,
 				&[
@@ -290,16 +305,21 @@ impl<'a, 'b> sc_executor_common::ebpf::SupervisorContext for EbpfSupervisorConte
 					Val::I64(r3 as i64),
 					Val::I64(r4 as i64),
 					Val::I64(r5 as i64),
-					Val::I64(gas_left as i64),
 				],
 				&mut rets,
-			)
-			.unwrap();
+			);
+
+		// reload gas_left from the supervisor memory.
+		*gas_left = self.host_context.read_u64(self.state).map_err(|_| ())?;
 
 		dbg!("out");
 		self.host_context.caller.data_mut().host_state_mut().unwrap().ebpf_memory_ref = None;
 
-		rets[0].unwrap_i64() as u64
+		if let Err(_) = result {
+			return Err(());
+		}
+
+		Ok(rets[0].unwrap_i64() as u64)
 	}
 }
 

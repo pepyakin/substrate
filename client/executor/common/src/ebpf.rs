@@ -98,7 +98,10 @@ struct ProcessData<'a> {
 /// Specifically, it will be invoked every time when the eBPF program invokes the `ext_syscall`
 /// syscall (via `call ext_syscall` in eBPF code).
 pub trait SupervisorContext {
-	/// Returns the new gas left value. If set to 0 the eBPF program will be terminated with OOG.
+	/// Returns an `Ok(error code)`. If it's non-zero then the eBPF program will trap. `gas_left` can be
+	/// changed to any value. If it's zero then the eBPF program will run out of gas immediatelly.
+	///
+	/// Returns `Err` if the supervisor trapped.
 	fn supervisor_call(
 		&mut self,
 		r1: u64,
@@ -106,9 +109,9 @@ pub trait SupervisorContext {
 		r3: u64,
 		r4: u64,
 		r5: u64,
-		gas_left: u64,
+		gas_left: &mut u64,
 		memory_ref: MemoryRef<'_, '_>,
-	) -> u64;
+	) -> Result<u64, ()>;
 }
 
 /// Executes the given eBPF program.

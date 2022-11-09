@@ -23,6 +23,14 @@ pub struct PanicError {
 #[error("custom panic")]
 pub struct CustomPanic;
 
+#[derive(thiserror::Error, Debug)]
+#[error("supervisor returned non-zero error code")]
+pub struct SupervisorError;
+
+#[derive(thiserror::Error, Debug)]
+#[error("supervisor trapped")]
+pub struct SupervisorTrapped;
+
 macro_rules! register_syscall {
 	($registry:ident, $name:expr, $handler:ident) => {{
 		fn handle(
@@ -76,18 +84,23 @@ fn ext_syscall(
 	arg5: u64,
 	memory_mapping: &mut MemoryMapping,
 ) -> Result<u64, EbpfError> {
-	let gas_left = process_data.meter.get_remaining();
-	let post_gas_left = process_data.context.supervisor_call(
+	let mut gas_left = process_data.meter.get_remaining();
+	let err_code = process_data.context.supervisor_call(
 		arg1,
 		arg2,
 		arg3,
 		arg4,
 		arg5,
-		gas_left,
+		&mut gas_left,
 		MemoryRef { mapping: memory_mapping },
 	);
-	process_data.meter.set_gas_left(post_gas_left);
-	Ok(0)
+	process_data.meter.set_gas_left(gas_left);
+
+	match err_code {
+		Ok(0) => Ok(0),
+		Ok(_) => Err(EbpfError::UserError(Box::new(SupervisorError))),
+		Err(_) => Err(EbpfError::UserError(Box::new(SupervisorTrapped))),
+	}
 }
 
 // pub fn sol_memcpy_(dest: *mut u8, src: *const u8, n: u64);
