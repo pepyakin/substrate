@@ -1669,9 +1669,10 @@ pub trait Ebpf {
 		input: &[u8],
 		syscall_handler: u32,
 		state: u32,
+		gas_limit: u64,
 	) -> Vec<u8> {
 		self.ebpf()
-			.execute(program, input, syscall_handler, state)
+			.execute(program, input, syscall_handler, state, gas_limit)
 			.expect("execution failed")
 	}
 

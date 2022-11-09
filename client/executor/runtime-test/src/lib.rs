@@ -562,7 +562,7 @@ fn execute_ebpf(program: &[u8]) {
 			_ => panic!("unknown syscall: {}", r1),
 		}
 	}
-	sp_io::ebpf::execute(program, &[], syscall_handler as usize as u32, 0x1337);
+	sp_io::ebpf::execute(program, &[], syscall_handler as usize as u32, 0x1337, 100_000_000);
 
 	assert_eq!(unsafe { COUNTER }, 1);
 }

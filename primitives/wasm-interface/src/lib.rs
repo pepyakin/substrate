@@ -394,6 +394,7 @@ pub trait Ebpf {
 		input: &[u8],
 		syscall_handler: u32,
 		state: u32,
+		gas_limit: u64,
 	) -> Result<Vec<u8>>;
 
 	/// If the calling code that is in turn was called by the EBPF program, this function will read

@@ -169,6 +169,7 @@ impl<'a> sp_wasm_interface::Ebpf for HostContext<'a> {
 		input: &[u8],
 		syscall_handler: u32,
 		state: u32,
+		gas_limit: u64,
 	) -> sp_wasm_interface::Result<Vec<u8>> {
 		// Extract a syscall handler from the instance's table by the specified index.
 		let syscall_handler = {
@@ -191,6 +192,7 @@ impl<'a> sp_wasm_interface::Ebpf for HostContext<'a> {
 			program,
 			&mut input,
 			&mut EbpfSupervisorContext { syscall_handler, host_context: self, state },
+			gas_limit,
 		);
 
 		// TODO:

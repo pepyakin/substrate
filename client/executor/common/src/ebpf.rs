@@ -69,7 +69,12 @@ pub trait SupervisorContext {
 }
 
 /// Executes the given program represented as an elf binary and input data.
-pub fn execute(program: &[u8], input: &mut [u8], context: &mut dyn SupervisorContext) {
+pub fn execute(
+	program: &[u8],
+	input: &mut [u8],
+	context: &mut dyn SupervisorContext,
+	gas_limit: u64,
+) {
 	let config = Config::default();
 	let mut syscall_registry = SyscallRegistry::default();
 	syscall_registry.register_syscall_by_name(b"abort", abort_syscall).unwrap();
@@ -120,7 +125,7 @@ pub fn execute(program: &[u8], input: &mut [u8], context: &mut dyn SupervisorCon
 	)
 	.unwrap();
 	let _res = vm
-		.execute_program_interpreted(&mut TestInstructionMeter { remaining: 100_000_000 })
+		.execute_program_interpreted(&mut TestInstructionMeter { remaining: gas_limit })
 		.unwrap();
 }
 
