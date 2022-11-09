@@ -57,8 +57,19 @@ impl<'a, 'b> MemoryRef<'a, 'b> {
 	}
 }
 
-/// This context is used for calling back into the supervisor.
+struct ProcessData<'a> {
+	/// The bridge to the supervisor.
+	context: &'a mut dyn SupervisorContext,
+	/// The next available address in the heap. Used by the bumper allocator.
+	bumper_next: u64,
+}
+
+/// This trait is used as a bridge between the eBPF program and the supervisor.
+///
+/// Specifically, it will be invoked every time when the eBPF program invokes the `ext_syscall`
+/// syscall (via `call ext_syscall` in eBPF code).
 pub trait SupervisorContext {
+	/// Returns the new gas left value. If set to 0 the eBPF program will be terminated with OOG.
 	fn supervisor_call(
 		&mut self,
 		r1: u64,
@@ -93,7 +104,7 @@ pub fn execute(
 	let mut heap = AlignedMemory::<{ HOST_ALIGN }>::zero_filled(HEAP_SIZE);
 	let mut vm = EbpfVm::new(
 		&verified_executable,
-		&mut ProcessData { context, next: 0x300000000 },
+		&mut ProcessData { context, bumper_next: 0x300000000 },
 		heap.as_slice_mut(),
 		vec![region_input],
 	)
@@ -101,9 +112,4 @@ pub fn execute(
 	let _res = vm
 		.execute_program_interpreted(&mut TestInstructionMeter { remaining: gas_limit })
 		.unwrap();
-}
-
-struct ProcessData<'a> {
-	context: &'a mut dyn SupervisorContext,
-	next: u64,
 }

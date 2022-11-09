@@ -143,8 +143,8 @@ fn sol_alloc_free_syscall(
 	result: &mut solana_rbpf::vm::ProgramResult,
 ) {
 	if free_addr == 0 {
-		let addr = process_data.next;
-		process_data.next += size;
+		let addr = process_data.bumper_next;
+		process_data.bumper_next += size;
 		*result = solana_rbpf::vm::StableResult::Ok(addr as u64);
 	} else {
 		// do nothing
